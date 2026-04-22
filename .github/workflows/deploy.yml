@@ -40,7 +40,6 @@ jobs:
       - name: Connect to Tailscale Network
         uses: tailscale/github-action@v2
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           authkey: tskey-auth-k3n25oM3Sm11CNTRL-6ig7JH1CVxMYse3f58xjxMfkrYKSEgUK
 
       - name: Deploy securely via SSH
