@@ -1,0 +1,75 @@
+name: Secure Tailscale MHDP Deployment
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/mhdp-api
+  MODEL_VM_IP: 100.104.98.125
+  SUDO_PASS: 4e3w2qmhdp
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Connect to Tailscale Network
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          authkey: tskey-auth-k3n25oM3Sm11CNTRL-6ig7JH1CVxMYse3f58xjxMfkrYKSEgUK
+
+      - name: Deploy securely via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.MODEL_VM_IP }}
+          username: inference
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "${{ env.SUDO_PASS }}" | sudo -S echo "Authenticated Sudo."
+            
+            # Pull the latest image
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+            
+            # Create working directory for the deployment
+            mkdir -p ~/mhdp_deployment
+            cd ~/mhdp_deployment
+            
+            # Write out Docker Compose safely
+            cat << 'EOF' > docker-compose.yml
+            version: '3.8'
+            services:
+              mhdp-api:
+                image: ghcr.io/${{ env.IMAGE_NAME }}:latest
+                container_name: mhdp-api
+                ports:
+                  - "8000:8000"
+                restart: always
+            EOF
+            
+            # Launch
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker compose up -d

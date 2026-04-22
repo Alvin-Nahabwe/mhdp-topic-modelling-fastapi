@@ -1,0 +1,3 @@
+--- BERTopic SUPERVISED Evaluation Metrics ---
+Topic Diversity (PUW): 0.9600
+Topic Coherence (C_v): 0.5422

@@ -1,0 +1,4 @@
+tailscale invitation link: https://login.tailscale.com/admin/invite/F62pP4jaRxe9buof3D6421
+tailscale auth_key: tskey-auth-k3n25oM3Sm11CNTRL-6ig7JH1CVxMYse3f58xjxMfkrYKSEgUK
+Model VM IP: 100.104.98.125
+Sudo password: 4e3w2qmhdp
