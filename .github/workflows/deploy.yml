@@ -7,7 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/mhdp-api
+  # Hardcoded lowercase because Docker strictly rejects uppercase GitHub usernames (e.g., 'Alvin-Nahabwe')
+  IMAGE_NAME: alvin-nahabwe/mhdp-topic-modelling-fastapi/mhdp-api
   MODEL_VM_IP: 100.104.98.125
   SUDO_PASS: 4e3w2qmhdp
 
