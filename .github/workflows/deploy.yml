@@ -48,6 +48,7 @@ jobs:
           host: ${{ env.MODEL_VM_IP }}
           username: inference
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 120m
           script: |
             echo "${{ env.SUDO_PASS }}" | sudo -S echo "Authenticated Sudo."
             
