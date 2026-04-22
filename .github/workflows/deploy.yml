@@ -68,9 +68,10 @@ jobs:
                 image: ghcr.io/${{ env.IMAGE_NAME }}:latest
                 container_name: mhdp-api
                 ports:
-                  - "8000:8000"
+                  - "8080:8000"
                 restart: always
             EOF
             
             # Launch
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker compose down || true
             echo "${{ env.SUDO_PASS }}" | sudo -S docker compose up -d
