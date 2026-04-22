@@ -52,7 +52,7 @@ jobs:
             echo "${{ env.SUDO_PASS }}" | sudo -S echo "Authenticated Sudo."
             
             # Pull the latest image
-            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker login ghcr.io -u ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
             echo "${{ env.SUDO_PASS }}" | sudo -S docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
             
             # Create working directory for the deployment
