@@ -1,4 +1,4 @@
-name: Secure Tailscale MHDP Deployment
+name: Deploy MHDP API
 
 on:
   push:
@@ -7,10 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Hardcoded lowercase because Docker strictly rejects uppercase GitHub usernames (e.g., 'Alvin-Nahabwe')
+  # Lowercase required — Docker rejects uppercase in image names
   IMAGE_NAME: alvin-nahabwe/mhdp-topic-modelling-fastapi/mhdp-api
-  MODEL_VM_IP: 100.104.98.125
-  SUDO_PASS: 4e3w2qmhdp
 
 jobs:
   build-and-deploy:
@@ -23,7 +21,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to the Container registry
+      - name: Log in to container registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -37,40 +35,33 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Connect to Tailscale Network
+      - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
-          authkey: tskey-auth-k3n25oM3Sm11CNTRL-6ig7JH1CVxMYse3f58xjxMfkrYKSEgUK
+          authkey: ${{ secrets.TS_AUTHKEY }}
 
-      - name: Deploy securely via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ env.MODEL_VM_IP }}
+          host: ${{ secrets.MODEL_VM_IP }}
           username: inference
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 120m
           script_stop: true
           script: |
-            echo "${{ env.SUDO_PASS }}" | sudo -S echo "Authenticated Sudo."
-            
-            # Pull the latest image
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker login ghcr.io -u ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
-            
-            # Create working directory for the deployment
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S echo "Authenticated."
+
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S docker login ghcr.io -u ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+
             mkdir -p ~/mhdp_deployment
             cd ~/mhdp_deployment
-            
-            # Write out Docker Compose (printf avoids heredoc indentation issues)
+
             printf 'services:\n  mhdp-api:\n    image: ghcr.io/${{ env.IMAGE_NAME }}:latest\n    container_name: mhdp-api\n    ports:\n      - "8555:8000"\n    restart: always\n' > docker-compose.yml
-            
-            # Restart with the new image
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker compose down || true
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker compose up -d
-            
-            # Cleanup old images to prevent disk bloat
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker image prune -f
-            
-            # Verify container is running
+
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S docker compose down || true
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S docker compose up -d
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S docker image prune -f
+
             sleep 3
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker ps | grep mhdp-api
+            echo "${{ secrets.SUDO_PASS }}" | sudo -S docker ps | grep mhdp-api
