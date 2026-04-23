@@ -16,8 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # upon every single server boot/restart!
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('Davlan/afro-xlmr-base')"
 
-# Copy the API logic and the optimized semi-supervised BERTopic model artifacts
+# Copy the API logic, shared modules, and the optimized semi-supervised BERTopic model artifacts
 COPY api.py .
+COPY stop_words.py .
 COPY bertopic_semi_supervised ./bertopic_semi_supervised
 
 EXPOSE 8000

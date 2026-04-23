@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
+from stop_words import ALL_STOP_WORDS
 
 # Define a global dictionary to hold our models securely
 ml_models = {}
@@ -79,10 +80,10 @@ def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], 
     are present in the topic representation words. This provides clinician-relevant
     evidence from the specific call rather than generic model keywords.
     """
-    # Tokenize all texts and count word frequencies
+    # Tokenize all texts and count word frequencies (excluding stop words)
     word_counts = Counter()
     for text in texts:
-        tokens = text.lower().split()
+        tokens = [w for w in text.lower().split() if w not in ALL_STOP_WORDS and len(w) > 1]
         word_counts.update(tokens)
     
     # Score words: prioritize words that appear in the topic representation
@@ -108,8 +109,9 @@ def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], 
     matched.sort(key=lambda x: x[1], reverse=True)
     result = [w for w, _ in matched[:top_n]]
     
-    # If we don't have enough matches, fall back to the most frequent non-stopword
-    # tokens from the transcripts (still conversation-specific)
+    # If we don't have enough matches, fall back to the most frequent
+    # clinically relevant tokens from the transcripts
+    # Stop words are already filtered out during tokenization
     if len(result) < top_n:
         for word, count in word_counts.most_common():
             if word not in result and len(word) > 2:

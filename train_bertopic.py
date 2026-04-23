@@ -2,8 +2,9 @@ import pandas as pd
 from bertopic import BERTopic
 from bertopic.representation import MaximalMarginalRelevance
 from umap import UMAP
-from sklearn.feature_extraction.text import CountVectorizer, ENGLISH_STOP_WORDS
+from sklearn.feature_extraction.text import CountVectorizer
 from sentence_transformers import SentenceTransformer
+from stop_words import ALL_STOP_WORDS
 import os
 
 def main():
@@ -24,24 +25,8 @@ def main():
     # 1. Parameter Tuning: Custom UMAP for local structure
     umap_model = UMAP(n_neighbors=5, n_components=5, min_dist=0.0, metric='cosine', random_state=42)
     
-    # 2. Vocabulary Filtration Expansion
-    # Curated Luganda stop words and conversational filler markers
-    luganda_stops = [
-        "kale", "mbu", "anti", "ate", "mpoozi", "bambi", "naye", "era", "nga", "oba",
-        "ssebo", "nnyabo", "wangi", "yee", "nedda", "ddala", "nnyo", "nze", "ggwe", 
-        "gwe", "ye", "ffe", "mmwe", "mwe", "bo", "wange", "kino", "ekyo", "bino", 
-        "ebyo", "ne", "mu", "ku", "wa", "nti", "bwe", "eri", "okuva", "paka", "ko",
-        "ki", "kiki", "ani", "ddi", "lwaki", "otya", "mutya", "ndi", "oli", "ali", 
-        "tuli", "bali", "nina", "alina"
-    ]
-
-    document_specific_stops = [
-        "like", "just", "hmm", "eeh", "eh", "ah", "don", "t", "s", 
-        "kati", "awo", "waliwo", "na", "kuba", "umm", "mmh", "mpozi"
-    ]
-
-    custom_stop_words = list(ENGLISH_STOP_WORDS) + luganda_stops + document_specific_stops
-    vectorizer_model = CountVectorizer(stop_words=custom_stop_words)
+    # 2. Vocabulary Filtration — shared stop words module ensures consistency with inference
+    vectorizer_model = CountVectorizer(stop_words=list(ALL_STOP_WORDS))
     
     # 3. Diversified MMR Representation with explicit word limit
     representation_model = MaximalMarginalRelevance(diversity=0.3, top_n_words=3)
