@@ -80,7 +80,8 @@ def main():
 
     # Inject the actual textual Symptom Labels mapping to the Topic IDs!
     # Fix: BERTopic re-indexes topics by size dynamically, we map using the returned 'topics' sequence directly!
-    true_label_map = dict(zip(topics, df['symptom_label'].tolist()))
+    # Exclude topic -1 (outlier bucket) — it contains mixed unclassified documents
+    true_label_map = {t: l for t, l in zip(topics, df['symptom_label'].tolist()) if t != -1}
     topic_info.insert(2, 'Symptom_Label', topic_info['Topic'].map(true_label_map))
         
     topic_info.to_csv(os.path.join(base_dir, "topic_info.csv"), index=False)

@@ -3,5 +3,5 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
-bertopic_semi_supervised/
+bertopic_supervised/
 bertopic_unsupervised/
