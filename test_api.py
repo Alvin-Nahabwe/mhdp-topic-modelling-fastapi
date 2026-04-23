@@ -330,4 +330,30 @@ payload = {
                        'text': 'kale akawungeezi akalungi'}]}
 
 res = requests.post("http://100.104.98.125:8555/predict_symptoms", json=payload)
-print(json.dumps(res.json(), indent=2))
+data = res.json()
+
+# Detect response format (old per-transcript vs new aggregated)
+if 'total_transcripts' in data:
+    # New aggregated CallSummary format
+    print("=" * 60)
+    print("  MHDP Clinical Symptom Summary")
+    print("=" * 60)
+    print(f"  Total transcripts:      {data['total_transcripts']}")
+    print(f"  Classified:             {data['classified_transcripts']}")
+    print(f"  Undefined (no symptom): {data['undefined_transcripts']}")
+    print(f"  Classification rate:    {data['classification_rate']}%")
+    print("-" * 60)
+
+    for s in data['symptoms']:
+        print(f"\n  [{s['symptom_representation']}%]  {s['symptom_label']}")
+        print(f"          Confidence: {s['confidence_score']}")
+        print(f"          Keywords:   {', '.join(s['keywords'])}")
+
+    print("\n" + "=" * 60)
+else:
+    # Old per-transcript format (container not yet updated)
+    print("[NOTE] Old API version detected — new deployment may still be in progress.")
+
+print("\nRaw JSON:")
+print(json.dumps(data, indent=2))
+
