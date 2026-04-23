@@ -61,16 +61,8 @@ jobs:
             mkdir -p ~/mhdp_deployment
             cd ~/mhdp_deployment
             
-            # Write out Docker Compose
-            cat << 'EOF' > docker-compose.yml
-            services:
-              mhdp-api:
-                image: ghcr.io/${{ env.IMAGE_NAME }}:latest
-                container_name: mhdp-api
-                ports:
-                  - "8555:8000"
-                restart: always
-            EOF
+            # Write out Docker Compose (printf avoids heredoc indentation issues)
+            printf 'services:\n  mhdp-api:\n    image: ghcr.io/${{ env.IMAGE_NAME }}:latest\n    container_name: mhdp-api\n    ports:\n      - "8555:8000"\n    restart: always\n' > docker-compose.yml
             
             # Restart with the new image
             echo "${{ env.SUDO_PASS }}" | sudo -S docker compose down || true
