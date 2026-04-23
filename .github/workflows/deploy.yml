@@ -42,23 +42,7 @@ jobs:
         with:
           authkey: tskey-auth-k3n25oM3Sm11CNTRL-6ig7JH1CVxMYse3f58xjxMfkrYKSEgUK
 
-      - name: Stream image to Model VM via Tailscale
-        run: |
-          # Set up SSH key
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ env.MODEL_VM_IP }} >> ~/.ssh/known_hosts 2>/dev/null
-          
-          # Stream the Docker image directly to the VM over SSH (never touches runner disk)
-          echo "Streaming Docker image to VM..."
-          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | gzip | \
-            ssh -o StrictHostKeyChecking=no inference@${{ env.MODEL_VM_IP }} "cat > /tmp/mhdp-api.tar.gz"
-          
-          # Verify transfer
-          ssh -o StrictHostKeyChecking=no inference@${{ env.MODEL_VM_IP }} "ls -lh /tmp/mhdp-api.tar.gz"
-
-      - name: Deploy on Model VM
+      - name: Deploy securely via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.MODEL_VM_IP }}
@@ -66,17 +50,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 120m
           script_stop: true
-          envs: SUDO_PASS,IMAGE_NAME,REGISTRY
           script: |
             echo "${{ env.SUDO_PASS }}" | sudo -S echo "Authenticated Sudo."
             
-            # Load the image from the transferred tarball (no internet needed)
-            echo "Loading Docker image from tarball..."
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker load -i /tmp/mhdp-api.tar.gz
-            rm -f /tmp/mhdp-api.tar.gz
-            
-            # Verify the image was loaded
-            echo "${{ env.SUDO_PASS }}" | sudo -S docker images ghcr.io/${{ env.IMAGE_NAME }}:latest
+            # Pull the latest image
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker login ghcr.io -u ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
             
             # Create working directory for the deployment
             mkdir -p ~/mhdp_deployment
@@ -96,6 +75,9 @@ jobs:
             # Restart with the new image
             echo "${{ env.SUDO_PASS }}" | sudo -S docker compose down || true
             echo "${{ env.SUDO_PASS }}" | sudo -S docker compose up -d
+            
+            # Cleanup old images to prevent disk bloat
+            echo "${{ env.SUDO_PASS }}" | sudo -S docker image prune -f
             
             # Verify container is running
             sleep 3
