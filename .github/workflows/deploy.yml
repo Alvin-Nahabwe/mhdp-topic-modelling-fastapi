@@ -42,20 +42,21 @@ jobs:
         with:
           authkey: tskey-auth-k3n25oM3Sm11CNTRL-6ig7JH1CVxMYse3f58xjxMfkrYKSEgUK
 
-      - name: Transfer image to Model VM via Tailscale
+      - name: Stream image to Model VM via Tailscale
         run: |
-          # Save the Docker image to a tarball
-          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | gzip > /tmp/mhdp-api.tar.gz
-          echo "Image saved. Size: $(du -sh /tmp/mhdp-api.tar.gz | cut -f1)"
-          
-          # Set up SSH key for scp
+          # Set up SSH key
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ env.MODEL_VM_IP }} >> ~/.ssh/known_hosts 2>/dev/null
           
-          # Transfer image tarball to VM over Tailscale
-          scp -o StrictHostKeyChecking=no /tmp/mhdp-api.tar.gz inference@${{ env.MODEL_VM_IP }}:/tmp/mhdp-api.tar.gz
+          # Stream the Docker image directly to the VM over SSH (never touches runner disk)
+          echo "Streaming Docker image to VM..."
+          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | gzip | \
+            ssh -o StrictHostKeyChecking=no inference@${{ env.MODEL_VM_IP }} "cat > /tmp/mhdp-api.tar.gz"
+          
+          # Verify transfer
+          ssh -o StrictHostKeyChecking=no inference@${{ env.MODEL_VM_IP }} "ls -lh /tmp/mhdp-api.tar.gz"
 
       - name: Deploy on Model VM
         uses: appleboy/ssh-action@v1.0.3
