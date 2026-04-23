@@ -1,6 +1,6 @@
 # MHDP Topic Modelling API
 
-Clinical symptom classification service for the Mental Health Data Platform (MHDP) at Butabika National Referral Mental Hospital, Uganda. Classifies call centre transcripts into mental health symptom categories using semi-supervised topic modelling.
+Clinical symptom classification service for the Mental Health Data Prize (MHDP) project at Butabika National Referral Mental Hospital, Uganda. Classifies call centre transcripts into mental health symptom categories using semi-supervised topic modelling.
 
 ## Architecture
 
