@@ -113,11 +113,12 @@ def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], 
 
     # Pass 2: substring matches for morphological variants
     # e.g., "amaloboozi" matching "maloboozi" (Luganda prefix variation)
+    # Minimum 3 chars to avoid false positives
     for transcript_word, count in word_counts.items():
-        if transcript_word in [m[0] for m in matched]:
+        if transcript_word in [m[0] for m in matched] or len(transcript_word) < 3:
             continue
         for rep_word in topic_rep_lower:
-            if rep_word in transcript_word or transcript_word in rep_word:
+            if len(rep_word) >= 3 and (rep_word in transcript_word or transcript_word in rep_word):
                 matched.append((transcript_word, count))
                 break
 
@@ -164,7 +165,11 @@ async def predict_symptoms(payload: Payload):
 
     predicted_topics, probabilities = topic_model.transform(caller_texts)
 
-    # Group transcripts by symptom label
+    # Group transcripts by symptom label, applying keyword-overlap confidence gate.
+    # BERTopic's transform() never returns topic -1 (outlier detection only happens
+    # during training). Without this gate, every transcript — including greetings,
+    # filler, and nonsense — would be assigned a symptom label with high confidence
+    # due to the compressed embedding space.
     symptom_groups = defaultdict(lambda: {"texts": [], "confidences": [], "topic_ids": []})
     undefined_count = 0
     total = len(caller_texts)
@@ -172,8 +177,36 @@ async def predict_symptoms(payload: Payload):
     for text, topic_id, prob in zip(caller_texts, predicted_topics, probabilities):
         label = custom_labels.get(topic_id)
 
-        # Topic -1 or unmapped topics = no symptom detected
-        if topic_id == -1 or label is None or (isinstance(label, float) and pd.isna(label)):
+        # Unmapped topics = no symptom detected
+        if label is None or (isinstance(label, float) and pd.isna(label)):
+            undefined_count += 1
+            continue
+
+        # Keyword overlap gate: verify the transcript contains at least one of the
+        # topic's representation words. If there is no lexical overlap, the prediction
+        # has no basis beyond embedding proximity and should not be trusted.
+        topic_rep_words = topic_keywords_map.get(topic_id, [])
+        transcript_tokens = set(text.lower().split()) - ALL_STOP_WORDS
+        rep_words_lower = set(w.lower() for w in topic_rep_words)
+
+        # Check for exact match or substring match (Luganda morphological variants)
+        # Minimum 3 chars for substring matching to avoid false positives (e.g., "h" ~ "laughs")
+        has_overlap = False
+        for token in transcript_tokens:
+            if len(token) < 2:
+                continue
+            if token in rep_words_lower:
+                has_overlap = True
+                break
+            if len(token) >= 3:
+                for rep_word in rep_words_lower:
+                    if len(rep_word) >= 3 and (rep_word in token or token in rep_word):
+                        has_overlap = True
+                        break
+            if has_overlap:
+                break
+
+        if not has_overlap:
             undefined_count += 1
             continue
 

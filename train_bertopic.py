@@ -41,14 +41,14 @@ def main():
     print("\nConfiguring BERTopic components...")
     umap_model = UMAP(n_neighbors=5, n_components=5, min_dist=0.0, metric='cosine', random_state=42)
     vectorizer_model = CountVectorizer(stop_words=list(ALL_STOP_WORDS))
-    representation_model = MaximalMarginalRelevance(diversity=0.3, top_n_words=3)
+    representation_model = MaximalMarginalRelevance(diversity=0.3, top_n_words=10)
 
     # min_topic_size=2: captures rare symptom classes with few training examples
     # nr_topics=50: balances topic coherence with clinical symptom coverage (16/25 classes)
     topic_model = BERTopic(
         min_topic_size=2,
         nr_topics=50,
-        top_n_words=3,
+        top_n_words=10,
         umap_model=umap_model,
         vectorizer_model=vectorizer_model,
         representation_model=representation_model,
@@ -66,10 +66,10 @@ def main():
     print("\nSaving topic info...")
     topic_info = topic_model.get_topic_info()
 
-    # Prune empty-string padding from BERTopic's internal representation
+    # Remove empty-string padding from BERTopic's internal representation
     if 'Representation' in topic_info.columns:
         topic_info['Representation'] = topic_info['Representation'].apply(
-            lambda x: [w for w in x if w != ''][:3]
+            lambda x: [w for w in x if w != '']
         )
 
     # Map each topic to its majority symptom label (handles merged topics correctly)
@@ -96,12 +96,11 @@ def main():
     topics_dict = topic_model.get_topics()
     valid_topics = [t for t in topics_dict if t != -1]
 
-    # Topic Diversity (Proportion of Unique Words)
-    top_n = 3
+    # Topic Diversity (Proportion of Unique Words across all representation words)
     unique_words = set()
     total_words = 0
     for topic_id in valid_topics:
-        words = [w for w, _ in topics_dict[topic_id][:top_n]]
+        words = [w for w, _ in topics_dict[topic_id] if w != '']
         unique_words.update(words)
         total_words += len(words)
     diversity_score = len(unique_words) / total_words if total_words > 0 else 0

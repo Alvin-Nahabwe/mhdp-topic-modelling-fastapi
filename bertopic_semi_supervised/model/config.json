@@ -9,7 +9,7 @@
   ],
   "nr_topics": 50,
   "seed_topic_list": null,
-  "top_n_words": 3,
+  "top_n_words": 10,
   "verbose": true,
   "zeroshot_min_similarity": 0.7,
   "zeroshot_topic_list": null
