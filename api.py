@@ -46,6 +46,19 @@ async def lifespan(app: FastAPI):
     ml_models["custom_labels"] = custom_labels
     ml_models["topic_keywords"] = topic_keywords
 
+    # Build global clinical vocabulary from ALL topics' representation words.
+    # Used by the confidence gate to distinguish clinical content from noise.
+    clinical_vocab = set()
+    for tid, words in topic_keywords.items():
+        if tid == -1:
+            continue
+        for w in words:
+            w_lower = w.lower().strip()
+            if len(w_lower) >= 3 and w_lower not in ALL_STOP_WORDS:
+                clinical_vocab.add(w_lower)
+    ml_models["clinical_vocab"] = clinical_vocab
+    print(f"Clinical vocabulary: {len(clinical_vocab)} terms from {len(topic_keywords)-1} topics.")
+
     print("Inference endpoint ready.")
     yield
     ml_models.clear()
@@ -113,12 +126,12 @@ def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], 
 
     # Pass 2: substring matches for morphological variants
     # e.g., "amaloboozi" matching "maloboozi" (Luganda prefix variation)
-    # Minimum 3 chars to avoid false positives
+    # Minimum 4 chars to avoid false positives
     for transcript_word, count in word_counts.items():
-        if transcript_word in [m[0] for m in matched] or len(transcript_word) < 3:
+        if transcript_word in [m[0] for m in matched] or len(transcript_word) < 4:
             continue
         for rep_word in topic_rep_lower:
-            if len(rep_word) >= 3 and (rep_word in transcript_word or transcript_word in rep_word):
+            if len(rep_word) >= 4 and (rep_word in transcript_word or transcript_word in rep_word):
                 matched.append((transcript_word, count))
                 break
 
@@ -165,11 +178,18 @@ async def predict_symptoms(payload: Payload):
 
     predicted_topics, probabilities = topic_model.transform(caller_texts)
 
-    # Group transcripts by symptom label, applying keyword-overlap confidence gate.
+    # Group transcripts by symptom label, applying a clinical vocabulary gate.
     # BERTopic's transform() never returns topic -1 (outlier detection only happens
     # during training). Without this gate, every transcript — including greetings,
     # filler, and nonsense — would be assigned a symptom label with high confidence
     # due to the compressed embedding space.
+    #
+    # The gate checks if the transcript contains ANY word from the global clinical
+    # vocabulary (all topics' representation words combined). This separates the
+    # question "is this clinical content?" from "which specific symptom?" — the
+    # model may assign the wrong topic, but as long as the text is clinical, the
+    # assignment is a reasonable attempt.
+    clinical_vocab = ml_models["clinical_vocab"]
     symptom_groups = defaultdict(lambda: {"texts": [], "confidences": [], "topic_ids": []})
     undefined_count = 0
     total = len(caller_texts)
@@ -182,31 +202,29 @@ async def predict_symptoms(payload: Payload):
             undefined_count += 1
             continue
 
-        # Keyword overlap gate: verify the transcript contains at least one of the
-        # topic's representation words. If there is no lexical overlap, the prediction
-        # has no basis beyond embedding proximity and should not be trusted.
-        topic_rep_words = topic_keywords_map.get(topic_id, [])
+        # Clinical vocabulary gate: check if the transcript contains any word
+        # from the global clinical vocabulary (across all topics)
         transcript_tokens = set(text.lower().split()) - ALL_STOP_WORDS
-        rep_words_lower = set(w.lower() for w in topic_rep_words)
 
-        # Check for exact match or substring match (Luganda morphological variants)
-        # Minimum 3 chars for substring matching to avoid false positives (e.g., "h" ~ "laughs")
-        has_overlap = False
+        has_clinical_term = False
         for token in transcript_tokens:
             if len(token) < 2:
                 continue
-            if token in rep_words_lower:
-                has_overlap = True
+            # Exact match
+            if token in clinical_vocab:
+                has_clinical_term = True
                 break
-            if len(token) >= 3:
-                for rep_word in rep_words_lower:
-                    if len(rep_word) >= 3 and (rep_word in token or token in rep_word):
-                        has_overlap = True
+            # Substring match for Luganda morphological variants
+            # Minimum 4 chars for both sides to prevent short-token false positives
+            if len(token) >= 4:
+                for vocab_word in clinical_vocab:
+                    if len(vocab_word) >= 4 and (vocab_word in token or token in vocab_word):
+                        has_clinical_term = True
                         break
-            if has_overlap:
+            if has_clinical_term:
                 break
 
-        if not has_overlap:
+        if not has_clinical_term:
             undefined_count += 1
             continue
 
