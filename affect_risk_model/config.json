@@ -1,0 +1,18 @@
+{
+  "embedding_model": "Davlan/afro-xlmr-base",
+  "categories": [
+    "psychosis",
+    "depression",
+    "anxiety"
+  ],
+  "ordinal_levels": [
+    1,
+    2,
+    3
+  ],
+  "level_labels": {
+    "1": "Unlikely",
+    "2": "Possible",
+    "3": "Likely"
+  }
+}

@@ -1,5 +1,6 @@
 import requests
 import json
+import os
 
 payload = {
     'speaker_segments': [{'end': 2.86597,
@@ -329,7 +330,8 @@ payload = {
                        'start': 161.38972,
                        'text': 'kale akawungeezi akalungi'}]}
 
-res = requests.post("http://100.104.98.125:8555/predict_symptoms", json=payload)
+api_url = os.getenv("MHDP_API_URL", "http://localhost:8000")
+res = requests.post(f"{api_url}/predict_symptoms", json=payload)
 data = res.json()
 
 # Detect response format (old per-transcript vs new aggregated)
@@ -338,6 +340,7 @@ if 'total_transcripts' in data:
     print("=" * 60)
     print("  MHDP Clinical Symptom Summary")
     print("=" * 60)
+    print(f"  Model used:             {data.get('model_used', 'unknown')}")
     print(f"  Total transcripts:      {data['total_transcripts']}")
     print(f"  Classified:             {data['classified_transcripts']}")
     print(f"  Undefined (no symptom): {data['undefined_transcripts']}")
@@ -354,6 +357,40 @@ else:
     # Old per-transcript format (container not yet updated)
     print("[NOTE] Old API version detected — new deployment may still be in progress.")
 
-print("\nRaw JSON:")
+print("\nRaw JSON (symptoms):")
 print(json.dumps(data, indent=2))
+
+# --- Affect Risk Test ---
+print("\n\n" + "=" * 60)
+print("  MHDP Affect Risk Assessment")
+print("=" * 60)
+
+# Build full transcript from caller segments
+caller_texts = [seg['text'] for seg in payload['speaker_segments'] if seg['speaker_role_id'] == 'caller']
+full_transcript = " ".join(caller_texts)
+
+affect_payload = {"transcript": full_transcript}
+try:
+    affect_res = requests.post(f"{api_url}/predict_affect_risk", json=affect_payload)
+    if affect_res.status_code == 200:
+        affect_data = affect_res.json()
+        print(f"  Transcript length:  {affect_data['transcript_length']} chars")
+        print(f"  Clinical terms:     {', '.join(affect_data['clinical_terms_found'][:10])}")
+        print("-" * 60)
+
+        for risk in affect_data['risk_scores']:
+            print(f"\n  {risk['category'].upper()}: {risk['label']} (score={risk['score']})")
+            for level, prob in risk['probabilities'].items():
+                bar = "█" * int(prob * 20)
+                print(f"      {level:12s}: {prob:.4f} {bar}")
+
+        print("\n" + "=" * 60)
+        print("\nRaw JSON (affect risk):")
+        print(json.dumps(affect_data, indent=2))
+    elif affect_res.status_code == 503:
+        print("  [SKIP] Affect risk models not loaded.")
+    else:
+        print(f"  [ERROR] Status {affect_res.status_code}: {affect_res.text}")
+except Exception as e:
+    print(f"  [ERROR] Affect risk request failed: {e}")
 

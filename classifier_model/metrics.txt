@@ -1,0 +1,8 @@
+--- Fine-Tuned Classifier Evaluation Metrics ---
+Model: Logistic Regression on Davlan/afro-xlmr-base embeddings
+Cross-validation: 5-fold stratified
+Class weighting: Inversely proportional to frequency
+
+Macro F1:    0.5261 ± 0.0159
+Weighted F1: 0.6223 ± 0.0222
+Classes:     15

@@ -1,37 +1,104 @@
-# MHDP Topic Modelling API
+# MHDP Clinical Symptom Classification API
 
-Clinical symptom classification service for the Mental Health Data Prize (MHDP) project at Butabika National Referral Mental Hospital, Uganda. Classifies call centre transcripts into mental health symptom categories using semi-supervised topic modelling.
+Clinical symptom classification and affect risk assessment for the Mental Health Data Prize (MHDP) project at Butabika National Referral Mental Hospital, Uganda. Classifies call centre transcripts into mental health symptom categories using a multi-model pipeline grounded in the HiTOP dimensional taxonomy.
 
 ## Architecture
 
 ```
-Call Transcript → BERTopic Inference → Aggregated Symptom Summary
-                        │
-       Davlan/afro-xlmr-base embeddings
-       (cross-lingual English/Luganda)
+                          ┌──────────────────────┐
+                          │   Call Transcript     │
+                          │  (diarized segments)  │
+                          └──────────┬─────────────┘
+                                     │
+                          ┌──────────▼─────────────┐
+                          │  Davlan/afro-xlmr-base  │
+                          │  (768-dim embeddings)   │
+                          │  English + Luganda      │
+                          └──────────┬─────────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    │                                  │
+         ┌──────────▼──────────┐           ┌──────────▼──────────┐
+         │  Symptom Classifier │           │  Affect Risk Model  │
+         │  (LogReg, 15 HiTOP  │           │  (Ordinal, 3 cats)  │
+         │   classes)          │           │  Psychosis/Dep/Anx  │
+         └──────────┬──────────┘           └──────────┬──────────┘
+                    │                                  │
+         ┌──────────▼──────────┐           ┌──────────▼──────────┐
+         │  Clinical Vocab     │           │  Likelihood Scores  │
+         │  Gate (regex)       │           │  1=Unlikely          │
+         │  195 HiTOP terms    │           │  2=Possible          │
+         └──────────┬──────────┘           │  3=Likely            │
+                    │                      └──────────────────────┘
+         ┌──────────▼──────────┐
+         │  Aggregated Summary │
+         │  per symptom class  │
+         └─────────────────────┘
 ```
 
-The service receives diarized call transcripts, classifies each caller segment into a clinical symptom category (or marks it as undefined for non-symptom speech), and returns an aggregated per-call summary with symptom prevalence, confidence scores, and conversation-specific keywords.
+The service receives diarized call transcripts, classifies each caller segment into a clinical symptom category, and returns an aggregated per-call summary with symptom prevalence, confidence scores, and conversation-specific keywords. A separate endpoint provides ordinal risk assessment for psychosis, depression, and anxiety.
 
-## Model
+## Models
 
-**Architecture:** Semi-supervised BERTopic with UMAP dimensionality reduction, HDBSCAN clustering, and MMR-diversified representations.
+### Symptom Classifier (Production)
 
-| Parameter | Value |
+Fine-tuned Logistic Regression on frozen `Davlan/afro-xlmr-base` embeddings. **Recommended** for production.
+
+| Metric | Score |
 |---|---|
-| Embedding model | `Davlan/afro-xlmr-base` |
-| `min_topic_size` | 2 |
-| `nr_topics` | 50 |
-| Topic Coherence (C_v) | 0.5343 |
-| Topic Diversity (PUW) | 0.8503 |
-| Symptom classes captured | 16 / 25 |
-| Outlier rate | 10.2% |
+| Macro F1 (5-fold CV) | 0.526 |
+| Weighted F1 | 0.622 |
+| Classes captured | **15/15** |
+| Best per-class | Insomnia/Hypersomnia (0.81) |
 
-The semi-supervised approach passes clinician-annotated symptom labels as soft targets during training, allowing the model to discover natural topic structure while being guided by known symptom categories. An outlier class (topic -1) captures non-symptom conversational speech.
+### BERTopic (Fallback)
 
-## API
+Semi-supervised BERTopic with guided seed topics, UMAP + HDBSCAN.
 
-**Endpoint:** `POST /predict_symptoms`
+| Metric | Score |
+|---|---|
+| Macro F1 | 0.339 |
+| Classes captured | 11/15 |
+| Topic Coherence (C_v) | 0.465 |
+| Outlier rate | 12.9% |
+
+### Affect Risk (Ordinal)
+
+Cumulative threshold ordinal regression for likelihood estimation.
+
+| Category | Samples | MAE | Adjacent Accuracy |
+|---|---|---|---|
+| Psychosis | 138 | 0.754 | 81.2% |
+| Depression | 88 | 0.546 | 92.0% |
+| Anxiety | 42 | 0.381 | 88.1% |
+
+## HiTOP Symptom Taxonomy (15 classes)
+
+The classification uses a HiTOP-informed dimensional taxonomy that consolidates 25 original fragmented labels into 15 clinically meaningful classes:
+
+| Class | Description | Training Examples |
+|---|---|---|
+| Insomnia/Hypersomnia | Sleep disturbance | 130 |
+| Disorganized behaviors | Behavioral dysregulation | 104 |
+| Functional impairment | Occupational/social dysfunction | 97 |
+| Hallucination/Delusions | Perceptual/belief disturbance | 62 |
+| Suicidal behaviour | Self-harm ideation/attempts | 55 |
+| Anxiety spectrum | Worry, nervousness, panic | 55 |
+| Low mood/Anhedonia | Depressed mood, loss of interest | 49 |
+| Appetite disturbance | Eating changes | 34 |
+| Concentration problems | Cognitive difficulty | 33 |
+| Disorganized speech | Communication disruption | 32 |
+| Fatigue/Low energy | Physical exhaustion | 26 |
+| Over talkative | Pressured speech | 26 |
+| Isolation/Withdrawal | Social avoidance | 24 |
+| Psychomotor disturbance | Agitation/retardation | 14 |
+| Non-Clinical | Greetings, logistics, filler | 300 |
+
+## API Endpoints
+
+### `POST /predict_symptoms`
+
+Classify caller transcripts into symptom categories.
 
 **Request:**
 ```json
@@ -56,6 +123,7 @@ The semi-supervised approach passes clinician-annotated symptom labels as soft t
   "classified_transcripts": 7,
   "undefined_transcripts": 3,
   "classification_rate": 70.0,
+  "model_used": "classifier",
   "symptoms": [
     {
       "symptom_label": "Insomnia/Hypersomnia",
@@ -67,62 +135,111 @@ The semi-supervised approach passes clinician-annotated symptom labels as soft t
 }
 ```
 
-Only segments with `speaker_role_id: "caller"` are classified. Results are sorted by prevalence (most dominant symptom first).
+### `POST /predict_affect_risk`
+
+Ordinal likelihood assessment for psychosis, depression, and anxiety.
+
+**Request:**
+```json
+{
+  "transcript": "Full call transcript text..."
+}
+```
+
+**Response:**
+```json
+{
+  "transcript_length": 1234,
+  "risk_scores": [
+    {
+      "category": "psychosis",
+      "score": 2,
+      "label": "Possible",
+      "probabilities": {
+        "Unlikely": 0.15,
+        "Possible": 0.55,
+        "Likely": 0.30
+      }
+    }
+  ],
+  "clinical_terms_found": ["voices", "hearing", "paranoid"]
+}
+```
+
+### `GET /health`
+
+Container health check. Returns model load status.
+
+### `GET /metrics`
+
+Operational metrics: request counts, average latency, prediction/affect risk totals.
 
 ## Project Structure
 
 ```
-├── api.py                          # FastAPI inference service
-├── stop_words.py                   # Shared English/Luganda stop word lists
-├── train_bertopic.py               # Semi-supervised training pipeline (production)
-├── train_supervised_bertopic.py    # Supervised training pipeline (comparison)
-├── create_dataset.py               # JSON annotation → CSV conversion
-├── test_api.py                     # API integration test
-├── bertopic_semi_supervised/       # Model artifacts (deployed)
-│   ├── model/                      # Safetensors model files
-│   └── topic_info.csv              # Topic-to-symptom mapping
-├── Dockerfile                      # Production container
+├── api.py                          # FastAPI inference service (v2)
+├── clinical_vocabulary.py          # 213 HiTOP-aligned clinical terms
+├── stop_words.py                   # Audited English/Luganda stop words
+├── train_classifier.py             # LogReg classifier (production model)
+├── train_bertopic.py               # BERTopic v2 (seed topics, guided)
+├── train_affect_risk.py            # Ordinal affect risk model
+├── create_dataset.py               # JSON annotation → CSV pipeline (v2)
+├── test_api.py                     # Manual API integration test
+├── tests/                          # pytest test suite (37 tests)
+│   ├── test_api.py                 # API endpoint tests (mocked models)
+│   └── test_vocabulary.py          # Vocabulary integrity tests
+├── classifier_model/               # Production classifier artifacts
+│   ├── classifier.joblib
+│   └── label_encoder.joblib
+├── affect_risk_model/              # Ordinal risk models
+│   ├── psychosis/model.joblib
+│   ├── depression/model.joblib
+│   └── anxiety/model.joblib
+├── bertopic_semi_supervised/       # BERTopic model (fallback)
+├── Dockerfile                      # Multi-stage production container
 ├── requirements.txt                # Python dependencies
-└── .github/workflows/deploy.yml    # CI/CD pipeline
+├── pyproject.toml                  # pytest configuration
+└── .github/workflows/ci.yml       # CI/CD pipeline
 ```
 
 ## Deployment
 
-The service is containerized and deployed via GitHub Actions to a Tailscale-secured VM.
+The service is containerized with a multi-stage Docker build (builder + production) and deployed via GitHub Actions.
 
-**Pipeline:** Push to `main` → Build Docker image → Push to GHCR → SSH deploy to VM
-
-**Requirements:**
-- GitHub Secrets: `SSH_PRIVATE_KEY`, `TS_AUTHKEY`, `MODEL_VM_IP`, `SUDO_PASS`
-- The VM must have Docker installed and Tailscale connected
+**Pipeline:** Push to `main` → Lint → Test (37 tests) → Build Docker → Smoke test → Deploy
 
 **Local development:**
 ```bash
 pip install -r requirements.txt
+pip install pytest pytest-asyncio httpx
+
+# Run tests
+python -m pytest tests/ -v
+
+# Start server
 uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
 ## Training
 
-To retrain the model:
+To retrain models:
 
 ```bash
 # 1. Generate training CSV from annotated JSON
 python create_dataset.py
 
-# 2. Train semi-supervised model
-python train_bertopic.py
+# 2. Train classifier (recommended)
+python train_classifier.py
 
-# 3. (Optional) Train supervised model for comparison
-python train_supervised_bertopic.py
+# 3. Train affect risk model
+python train_affect_risk.py
+
+# 4. (Optional) Train BERTopic for comparison
+python train_bertopic.py
 ```
 
 Training requires `clinical_v3_final.json` (clinician annotations) in the project root.
 
-## Symptom Classes
+## Security
 
-The model captures 16 of 25 annotated symptom categories. The 9 missing classes have insufficient training data (1-16 examples) for density-based clustering.
-
-**Captured:** Insomnia/Hypersomnia, Impairment in functioning, Hallucination, Disorganized speech, Disorganized behaviors, Anxiety, Fatigue, Low mood, Concentration difficulties, Over talkative, Appetite changes, Worthlessness/guilt, Worry, Anhedonia, Suicidal behaviour, Psychomotor changes.
-
-**Missing (data-limited):** Delusions, Excessive energy, Excessive happiness, Fear of dying, Isolation, Palpitations, Passivity phenomena, Restlessness, Trouble relaxing.
+> **Note:** Early commits in this repository's git history contain deployment credentials (`deployment/` directory). These files are now gitignored and removed from the working tree, but remain in git history. The repository MUST remain private. If the repository is ever made public, all deployment SSH keys must be rotated first.

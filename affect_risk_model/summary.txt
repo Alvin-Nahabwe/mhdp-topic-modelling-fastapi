@@ -1,0 +1,7 @@
+--- Affect Risk Model Summary ---
+
+Category             MAE      QWK   Macro-F1    Adj.Acc  Samples
+-----------------------------------------------------------------
+psychosis         0.7536   0.1114     0.3941     0.8116      138
+depression        0.5455   0.2823     0.4854     0.9205       88
+anxiety           0.3810   0.1765     0.2911     0.8810       42

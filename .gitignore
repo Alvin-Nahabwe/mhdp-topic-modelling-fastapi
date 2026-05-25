@@ -20,6 +20,11 @@ bertopic_semi_supervised/metrics.txt
 # Training data (too large for git, kept locally)
 clinical_v3_final.json
 clinical_document.csv
+transcription_v2.json
+affect_risk_dataset.csv
+
+# pytest
+.pytest_cache/
 
 # Deployment credentials (sensitive)
 deployment/

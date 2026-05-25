@@ -1,0 +1,16 @@
+,Anxiety spectrum,Appetite disturbance,Concentration problems,Disorganized behaviors,Disorganized speech,Fatigue/Low energy,Functional impairment,Hallucination/Delusions,Insomnia/Hypersomnia,Isolation/Withdrawal,Low mood/Anhedonia,Non-Clinical,Over talkative,Psychomotor disturbance,Suicidal behaviour
+Anxiety spectrum,6,4,0,0,0,0,0,1,0,0,0,31,0,0,0
+Appetite disturbance,0,20,0,6,0,0,0,1,0,0,0,5,0,0,0
+Concentration problems,0,0,13,0,1,0,0,1,0,0,0,13,0,0,0
+Disorganized behaviors,0,2,0,33,0,0,0,16,0,0,0,47,0,0,0
+Disorganized speech,0,0,0,0,13,0,0,0,0,0,0,8,0,0,0
+Fatigue/Low energy,0,0,0,0,1,14,0,2,0,0,0,7,0,0,0
+Functional impairment,0,2,0,4,1,0,0,5,0,0,0,68,0,0,0
+Hallucination/Delusions,0,0,0,12,0,0,0,31,0,0,0,15,0,0,0
+Insomnia/Hypersomnia,0,4,0,0,0,0,0,0,32,0,0,90,0,0,0
+Isolation/Withdrawal,0,0,0,0,1,0,0,2,0,0,0,12,0,0,1
+Low mood/Anhedonia,0,0,0,0,3,0,0,2,2,0,0,27,0,0,0
+Non-Clinical,0,4,0,1,0,0,0,8,0,0,0,259,0,0,0
+Over talkative,0,6,0,0,0,0,0,2,0,0,0,4,9,0,0
+Psychomotor disturbance,0,1,0,0,1,1,0,1,0,0,0,3,0,0,0
+Suicidal behaviour,1,0,0,11,0,0,0,4,0,0,0,21,0,0,11

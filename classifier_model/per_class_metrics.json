@@ -1,0 +1,105 @@
+{
+  "Anxiety spectrum": {
+    "precision": 0.6,
+    "recall": 0.7090909090909091,
+    "f1-score": 0.65,
+    "support": 55.0
+  },
+  "Appetite disturbance": {
+    "precision": 0.5434782608695652,
+    "recall": 0.7352941176470589,
+    "f1-score": 0.625,
+    "support": 34.0
+  },
+  "Concentration problems": {
+    "precision": 0.47368421052631576,
+    "recall": 0.5454545454545454,
+    "f1-score": 0.5070422535211268,
+    "support": 33.0
+  },
+  "Disorganized behaviors": {
+    "precision": 0.5178571428571429,
+    "recall": 0.5576923076923077,
+    "f1-score": 0.5370370370370371,
+    "support": 104.0
+  },
+  "Disorganized speech": {
+    "precision": 0.5777777777777777,
+    "recall": 0.8125,
+    "f1-score": 0.6753246753246753,
+    "support": 32.0
+  },
+  "Fatigue/Low energy": {
+    "precision": 0.46153846153846156,
+    "recall": 0.46153846153846156,
+    "f1-score": 0.46153846153846156,
+    "support": 26.0
+  },
+  "Functional impairment": {
+    "precision": 0.391304347826087,
+    "recall": 0.3711340206185567,
+    "f1-score": 0.38095238095238093,
+    "support": 97.0
+  },
+  "Hallucination/Delusions": {
+    "precision": 0.6571428571428571,
+    "recall": 0.7419354838709677,
+    "f1-score": 0.696969696969697,
+    "support": 62.0
+  },
+  "Insomnia/Hypersomnia": {
+    "precision": 0.8360655737704918,
+    "recall": 0.7846153846153846,
+    "f1-score": 0.8095238095238095,
+    "support": 130.0
+  },
+  "Isolation/Withdrawal": {
+    "precision": 0.3333333333333333,
+    "recall": 0.4166666666666667,
+    "f1-score": 0.37037037037037035,
+    "support": 24.0
+  },
+  "Low mood/Anhedonia": {
+    "precision": 0.3829787234042553,
+    "recall": 0.3673469387755102,
+    "f1-score": 0.375,
+    "support": 49.0
+  },
+  "Non-Clinical": {
+    "precision": 0.8594377510040161,
+    "recall": 0.7133333333333334,
+    "f1-score": 0.7795992714025501,
+    "support": 300.0
+  },
+  "Over talkative": {
+    "precision": 0.5161290322580645,
+    "recall": 0.6153846153846154,
+    "f1-score": 0.5614035087719298,
+    "support": 26.0
+  },
+  "Psychomotor disturbance": {
+    "precision": 0.0625,
+    "recall": 0.07142857142857142,
+    "f1-score": 0.06666666666666667,
+    "support": 14.0
+  },
+  "Suicidal behaviour": {
+    "precision": 0.4807692307692308,
+    "recall": 0.45454545454545453,
+    "f1-score": 0.4672897196261682,
+    "support": 55.0
+  },
+  "accuracy": 0.6205571565802114,
+  "macro avg": {
+    "precision": 0.5129331135385066,
+    "recall": 0.5571973873774895,
+    "f1-score": 0.5309145234469915,
+    "support": 1041.0
+  },
+  "weighted avg": {
+    "precision": 0.6380189436255019,
+    "recall": 0.6205571565802114,
+    "f1-score": 0.6253330093002236,
+    "support": 1041.0
+  }
+}
