@@ -17,7 +17,6 @@ import os
 import pandas as pd
 from bertopic import BERTopic
 from bertopic.representation import MaximalMarginalRelevance
-from bertopic.backend import BaseEmbedder
 from bertopic.cluster import BaseCluster
 from bertopic.dimensionality import BaseDimensionalityReduction
 from sklearn.feature_extraction.text import CountVectorizer
@@ -76,7 +75,13 @@ def main():
         )
 
     # Map topics to symptom labels (exclude outlier topic -1)
-    true_label_map = {t: l for t, l in zip(topics, df['symptom_label'].tolist()) if t != -1}
+    true_label_map = {
+        t: label
+        for t, label in zip(
+            topics, df['symptom_label'].tolist()
+        )
+        if t != -1
+    }
     topic_info.insert(2, 'Symptom_Label', topic_info['Topic'].map(true_label_map))
 
     topic_info.to_csv(os.path.join(base_dir, "topic_info.csv"), index=False)
@@ -104,7 +109,12 @@ def main():
     dictionary = Dictionary(tokenized_docs)
     topic_words = [[w for w, _ in topics_dict[topic_id]] for topic_id in valid_topics]
 
-    cm = CoherenceModel(topics=topic_words, texts=tokenized_docs, dictionary=dictionary, coherence='c_v')
+    cm = CoherenceModel(
+        topics=topic_words,
+        texts=tokenized_docs,
+        dictionary=dictionary,
+        coherence='c_v',
+    )
     coherence_score = cm.get_coherence()
 
     metrics_out = (
@@ -123,9 +133,17 @@ def main():
 
     try:
         reduced_embeddings = UMAP(
-            n_neighbors=10, n_components=2, min_dist=0.0, metric='cosine', random_state=42
+            n_neighbors=10,
+            n_components=2,
+            min_dist=0.0,
+            metric='cosine',
+            random_state=42,
         ).fit_transform(embeddings)
-        fig = topic_model.visualize_documents(docs, reduced_embeddings=reduced_embeddings, custom_labels=True)
+        fig = topic_model.visualize_documents(
+            docs,
+            reduced_embeddings=reduced_embeddings,
+            custom_labels=True,
+        )
         fig.write_html(os.path.join(viz_dir, "topics_documents_scatter.html"))
     except Exception as e:
         print(f"Skipped document scatter plot: {e}")
@@ -159,7 +177,11 @@ def main():
     # --- Save model ---
     model_path = os.path.join(base_dir, "model")
     print(f"\nSaving model to {model_path}...")
-    topic_model.save(model_path, serialization="safetensors", save_embedding_model=False)
+    topic_model.save(
+        model_path,
+        serialization="safetensors",
+        save_embedding_model=False,
+    )
 
     print("Pipeline completed successfully.")
 

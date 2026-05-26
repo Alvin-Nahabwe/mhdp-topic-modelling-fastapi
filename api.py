@@ -22,10 +22,8 @@ import json
 import time
 import logging
 import pandas as pd
-import numpy as np
 from collections import Counter, defaultdict
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -97,20 +95,31 @@ for terms in HITOP_VOCABULARY.values():
 _sorted_terms = sorted(_all_clinical_terms, key=len, reverse=True)
 # Escape for regex, join with OR, require word boundaries
 _clinical_pattern = re.compile(
-    r'\b(?:' + '|'.join(re.escape(t) for t in _sorted_terms) + r')\b',
-    re.IGNORECASE
+    r'\b(?:'
+    + '|'.join(re.escape(t) for t in _sorted_terms)
+    + r')\b',
+    re.IGNORECASE,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load BERTopic model, classifier, and affect risk models at startup."""
+    """Load BERTopic model, classifier, and affect risk
+    models at startup.
+    """
     print("Loading embedding model and BERTopic artifacts...")
     embedder = SentenceTransformer("Davlan/afro-xlmr-base")
-    topic_model = BERTopic.load("./bertopic_semi_supervised/model", embedding_model=embedder)
+    topic_model = BERTopic.load(
+        "./bertopic_semi_supervised/model",
+        embedding_model=embedder,
+    )
 
-    topic_info = pd.read_csv("./bertopic_semi_supervised/topic_info.csv")
-    custom_labels = topic_info.set_index('Topic')['Symptom_Label'].to_dict()
+    topic_info = pd.read_csv(
+        "./bertopic_semi_supervised/topic_info.csv"
+    )
+    custom_labels = (
+        topic_info.set_index('Topic')['Symptom_Label'].to_dict()
+    )
 
     # Build topic keyword lookup (topic_id -> list of representation words)
     topic_keywords = {}
@@ -118,7 +127,11 @@ async def lifespan(app: FastAPI):
         tid = row['Topic']
         rep = row.get('Representation', '[]')
         if isinstance(rep, str):
-            words = [w.strip().strip("'\"") for w in rep.strip("[]").split(",") if w.strip().strip("'\"")]
+            words = [
+                w.strip().strip("'\"")
+                for w in rep.strip("[]").split(",")
+                if w.strip().strip("'\"")
+            ]
         else:
             words = rep if isinstance(rep, list) else []
         topic_keywords[tid] = words
@@ -139,7 +152,11 @@ async def lifespan(app: FastAPI):
             if len(w_lower) >= 3 and w_lower not in ALL_STOP_WORDS:
                 clinical_vocab.add(w_lower)
     ml_models["clinical_vocab"] = clinical_vocab
-    print(f"Clinical vocabulary: {len(clinical_vocab)} topic terms + {len(_all_clinical_terms)} HiTOP terms.")
+    print(
+        f"Clinical vocabulary: {len(clinical_vocab)} "
+        f"topic terms + {len(_all_clinical_terms)} "
+        f"HiTOP terms."
+    )
 
     # Load classifier model if available (preferred over BERTopic for classification)
     classifier_path = "./classifier_model/classifier.joblib"
@@ -148,16 +165,23 @@ async def lifespan(app: FastAPI):
         import joblib
         ml_models["classifier"] = joblib.load(classifier_path)
         ml_models["label_encoder"] = joblib.load(le_path)
-        print(f"Classifier loaded: {len(ml_models['label_encoder'].classes_)} classes.")
+        print(
+            "Classifier loaded: "
+            f"{len(ml_models['label_encoder'].classes_)}"
+            " classes."
+        )
 
     # Load affect risk models if available
     affect_risk_dir = "./affect_risk_model"
     if os.path.exists(affect_risk_dir):
         import joblib
         for category in ["psychosis", "depression", "anxiety"]:
-            model_path = os.path.join(affect_risk_dir, category, "model.joblib")
+            model_path = os.path.join(
+                affect_risk_dir, category, "model.joblib"
+            )
             if os.path.exists(model_path):
-                ml_models[f"affect_{category}"] = joblib.load(model_path)
+                key = f"affect_{category}"
+                ml_models[key] = joblib.load(model_path)
                 print(f"Affect risk model loaded: {category}")
 
     print("Inference endpoint ready.")
@@ -168,7 +192,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="MHDP Clinical Symptoms API",
-    description="Clinical symptom classification and affect risk assessment for mental health call transcripts.",
+    description=(
+        "Clinical symptom classification and affect risk"
+        " assessment for mental health call transcripts."
+    ),
     version="2.0.0",
 )
 
@@ -189,7 +216,8 @@ async def log_requests(request: Request, call_next):
         _metrics["errors_total"] += 1
 
     logger.info(
-        f"{request.method} {request.url.path} {response.status_code} {latency_ms}ms",
+        f"{request.method} {request.url.path}"
+        f" {response.status_code} {latency_ms}ms",
         extra={
             "endpoint": request.url.path,
             "latency_ms": latency_ms,
@@ -210,7 +238,18 @@ async def health():
         "model_loaded": model_loaded,
         "classifier_loaded": classifier_loaded,
         "affect_risk_loaded": affect_risk_loaded,
-        "symptom_classes": len(set(ml_models.get("custom_labels", {}).values()) - {None, ""}) if model_loaded else 0,
+        "symptom_classes": (
+            len(
+                set(
+                    ml_models.get(
+                        "custom_labels", {}
+                    ).values()
+                )
+                - {None, ""}
+            )
+            if model_loaded
+            else 0
+        ),
         "clinical_vocab_size": len(_all_clinical_terms),
     }
 
@@ -236,7 +275,12 @@ async def metrics():
 
 class Segment(BaseModel):
     end: float = Field(..., ge=0, description="Segment end time in seconds")
-    language: str = Field(..., min_length=1, max_length=10, description="Language code (en, lg)")
+    language: str = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="Language code (en, lg)",
+    )
     speaker: str = Field(..., min_length=1, max_length=100)
     speaker_role_id: str = Field(..., min_length=1, max_length=50,
                                  description="Role: 'caller' or 'agent'")
@@ -320,7 +364,11 @@ class AffectRiskResponse(BaseModel):
 
 # --- Keyword Extraction ---
 
-def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], top_n: int = 3) -> list[str]:
+def extract_conversation_keywords(
+    texts: list[str],
+    topic_rep_words: list[str],
+    top_n: int = 3,
+) -> list[str]:
     """
     Extract keywords from actual conversation transcripts that match the
     topic representation words. Returns conversation-specific evidence
@@ -334,7 +382,10 @@ def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], 
     # Tokenize and count, excluding stop words upfront
     word_counts = Counter()
     for text in texts:
-        tokens = [w for w in text.lower().split() if w not in ALL_STOP_WORDS and len(w) > 1]
+        tokens = [
+            w for w in text.lower().split()
+            if w not in ALL_STOP_WORDS and len(w) > 1
+        ]
         word_counts.update(tokens)
 
     topic_rep_lower = [w.lower() for w in topic_rep_words]
@@ -349,10 +400,19 @@ def extract_conversation_keywords(texts: list[str], topic_rep_words: list[str], 
     # e.g., "amaloboozi" matching "maloboozi" (Luganda prefix variation)
     # Minimum 4 chars to avoid false positives
     for transcript_word, count in word_counts.items():
-        if transcript_word in [m[0] for m in matched] or len(transcript_word) < 4:
+        already = [m[0] for m in matched]
+        if transcript_word in already:
+            continue
+        if len(transcript_word) < 4:
             continue
         for rep_word in topic_rep_lower:
-            if len(rep_word) >= 4 and (rep_word in transcript_word or transcript_word in rep_word):
+            if (
+                len(rep_word) >= 4
+                and (
+                    rep_word in transcript_word
+                    or transcript_word in rep_word
+                )
+            ):
                 matched.append((transcript_word, count))
                 break
 
@@ -397,7 +457,11 @@ async def predict_symptoms(payload: Payload):
     If the fine-tuned classifier is available, it is used instead of BERTopic
     for more accurate classification (covers all 15 classes).
     """
-    caller_texts = [seg.text for seg in payload.speaker_segments if seg.speaker_role_id == 'caller']
+    caller_texts = [
+        seg.text
+        for seg in payload.speaker_segments
+        if seg.speaker_role_id == 'caller'
+    ]
 
     if not caller_texts:
         return CallSummary(
@@ -418,7 +482,9 @@ async def predict_symptoms(payload: Payload):
 
     _metrics["predictions_total"] += 1
     logger.info(
-        f"Symptom prediction: {result.classified_transcripts}/{result.total_transcripts} classified",
+        "Symptom prediction: "
+        f"{result.classified_transcripts}/"
+        f"{result.total_transcripts} classified",
         extra={"extra_data": {
             "model_used": result.model_used,
             "total_transcripts": result.total_transcripts,
@@ -436,7 +502,9 @@ def _predict_with_classifier(caller_texts: list[str]) -> CallSummary:
     label_encoder = ml_models["label_encoder"]
 
     embeddings = embedder.encode(caller_texts)
-    predicted_labels = label_encoder.inverse_transform(classifier.predict(embeddings))
+    predicted_labels = label_encoder.inverse_transform(
+        classifier.predict(embeddings)
+    )
     probabilities = classifier.predict_proba(embeddings)
 
     symptom_groups = defaultdict(lambda: {"texts": [], "confidences": []})
@@ -483,7 +551,11 @@ def _predict_with_classifier(caller_texts: list[str]) -> CallSummary:
         total_transcripts=total,
         classified_transcripts=classified_count,
         undefined_transcripts=undefined_count,
-        classification_rate=round((classified_count / total) * 100, 1) if total > 0 else 0.0,
+        classification_rate=(
+            round((classified_count / total) * 100, 1)
+            if total > 0
+            else 0.0
+        ),
         model_used="classifier",
         symptoms=symptoms
     )
@@ -507,7 +579,13 @@ def _predict_with_bertopic(caller_texts: list[str]) -> CallSummary:
 
     predicted_topics, probabilities = topic_model.transform(caller_texts)
 
-    symptom_groups = defaultdict(lambda: {"texts": [], "confidences": [], "topic_ids": []})
+    symptom_groups = defaultdict(
+        lambda: {
+            "texts": [],
+            "confidences": [],
+            "topic_ids": [],
+        }
+    )
     undefined_count = 0
     total = len(caller_texts)
 
@@ -522,7 +600,9 @@ def _predict_with_bertopic(caller_texts: list[str]) -> CallSummary:
         # Clinical vocabulary gate (compiled regex — fast)
         if not has_clinical_content(text):
             # Fallback: check against topic representation words
-            transcript_tokens = set(text.lower().split()) - ALL_STOP_WORDS
+            transcript_tokens = (
+                set(text.lower().split()) - ALL_STOP_WORDS
+            )
             has_topic_term = False
             for token in transcript_tokens:
                 if len(token) < 2:
@@ -532,7 +612,13 @@ def _predict_with_bertopic(caller_texts: list[str]) -> CallSummary:
                     break
                 if len(token) >= 4:
                     for vocab_word in clinical_vocab:
-                        if len(vocab_word) >= 4 and (vocab_word in token or token in vocab_word):
+                        if (
+                            len(vocab_word) >= 4
+                            and (
+                                vocab_word in token
+                                or token in vocab_word
+                            )
+                        ):
                             has_topic_term = True
                             break
                 if has_topic_term:
@@ -576,7 +662,11 @@ def _predict_with_bertopic(caller_texts: list[str]) -> CallSummary:
         total_transcripts=total,
         classified_transcripts=classified_count,
         undefined_transcripts=undefined_count,
-        classification_rate=round((classified_count / total) * 100, 1) if total > 0 else 0.0,
+        classification_rate=(
+            round((classified_count / total) * 100, 1)
+            if total > 0
+            else 0.0
+        ),
         model_used="bertopic",
         symptoms=symptoms
     )
@@ -594,11 +684,18 @@ async def predict_affect_risk(request: AffectRiskRequest):
     Requires affect risk models to be loaded (train_affect_risk.py).
     """
     # Check if any affect risk models are loaded
-    loaded_categories = [k.replace("affect_", "") for k in ml_models if k.startswith("affect_")]
+    loaded_categories = [
+        k.replace("affect_", "")
+        for k in ml_models
+        if k.startswith("affect_")
+    ]
     if not loaded_categories:
         raise HTTPException(
             status_code=503,
-            detail="Affect risk models not loaded. Run train_affect_risk.py first."
+            detail=(
+                "Affect risk models not loaded."
+                " Run train_affect_risk.py first."
+            )
         )
 
     embedder = ml_models["embedder"]
@@ -627,8 +724,13 @@ async def predict_affect_risk(request: AffectRiskRequest):
         ))
 
     # Detect clinical terms in the transcript
-    clinical_matches = _clinical_pattern.findall(request.transcript.lower())
-    unique_terms = list(dict.fromkeys(clinical_matches))[:20]  # dedupe, cap at 20
+    clinical_matches = _clinical_pattern.findall(
+        request.transcript.lower()
+    )
+    # dedupe, cap at 20
+    unique_terms = list(
+        dict.fromkeys(clinical_matches)
+    )[:20]
 
     _metrics["affect_risk_total"] += 1
     logger.info(

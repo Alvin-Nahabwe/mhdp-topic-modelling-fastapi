@@ -31,7 +31,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sentence_transformers import SentenceTransformer
 
 from stop_words import ALL_STOP_WORDS
-from clinical_vocabulary import HITOP_VOCABULARY, get_seed_topics
+from clinical_vocabulary import get_seed_topics
 
 
 def detect_language(text):
@@ -62,8 +62,12 @@ def main():
     targets = df['target'].tolist()
     labels = df['symptom_label'].tolist()
 
-    print(f"Loaded {len(docs)} documents across {df['symptom_label'].nunique()} classes.")
-    print(f"Class distribution:")
+    n_classes = df['symptom_label'].nunique()
+    print(
+        f"Loaded {len(docs)} documents"
+        f" across {n_classes} classes."
+    )
+    print("Class distribution:")
     for label, count in Counter(labels).most_common():
         print(f"  {label:45s} {count:4d}")
 
@@ -110,7 +114,8 @@ def main():
         verbose=True
     )
 
-    # Fit: passing 'y' enables semi-supervised mode (guides clustering with known labels)
+    # Fit: passing 'y' enables semi-supervised mode
+    # (guides clustering with known labels)
     print("\nFitting semi-supervised model with seed topics...")
     topics, probs = topic_model.fit_transform(docs, embeddings=embeddings, y=targets)
 
@@ -132,12 +137,12 @@ def main():
     symptom_labels = df['symptom_label'].tolist()
 
     topic_label_votes = {}
-    for t, l in zip(final_topics, symptom_labels):
+    for t, label in zip(final_topics, symptom_labels):
         if t == -1:
             continue
         if t not in topic_label_votes:
             topic_label_votes[t] = []
-        topic_label_votes[t].append(l)
+        topic_label_votes[t].append(label)
 
     true_label_map = {
         t: Counter(lbl_list).most_common(1)[0][0]
@@ -280,9 +285,17 @@ def main():
 
     try:
         reduced_embeddings = UMAP(
-            n_neighbors=10, n_components=2, min_dist=0.0, metric='cosine', random_state=42
+            n_neighbors=10,
+            n_components=2,
+            min_dist=0.0,
+            metric='cosine',
+            random_state=42,
         ).fit_transform(embeddings)
-        fig = topic_model.visualize_documents(docs, reduced_embeddings=reduced_embeddings, custom_labels=True)
+        fig = topic_model.visualize_documents(
+            docs,
+            reduced_embeddings=reduced_embeddings,
+            custom_labels=True,
+        )
         fig.write_html(os.path.join(viz_dir, "topics_documents_scatter.html"))
     except Exception as e:
         print(f"Skipped document scatter plot: {e}")
@@ -316,7 +329,11 @@ def main():
     # --- Save model ---
     model_path = os.path.join(base_dir, "model")
     print(f"\nSaving model to {model_path}...")
-    topic_model.save(model_path, serialization="safetensors", save_embedding_model=False)
+    topic_model.save(
+        model_path,
+        serialization="safetensors",
+        save_embedding_model=False,
+    )
 
     print("\n" + "=" * 60)
     print("  Pipeline completed successfully.")

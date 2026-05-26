@@ -178,8 +178,15 @@ def validate_no_clinical_overlap(clinical_vocab, stop_words):
     """
     overlap = clinical_vocab & stop_words
     if overlap:
-        print(f"WARNING: {len(overlap)} clinical terms found in stop words: {sorted(overlap)}")
-        print("These should be removed from stop_words.py to avoid filtering clinical signal.")
+        print(
+            f"WARNING: {len(overlap)} clinical terms"
+            f" found in stop words: {sorted(overlap)}"
+        )
+        print(
+            "These should be removed from"
+            " stop_words.py to avoid filtering"
+            " clinical signal."
+        )
     return overlap
 
 

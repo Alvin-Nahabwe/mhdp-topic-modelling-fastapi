@@ -33,7 +33,6 @@ from sklearn.metrics import (
     classification_report, confusion_matrix,
     mean_absolute_error, cohen_kappa_score
 )
-from sklearn.preprocessing import LabelEncoder
 from sentence_transformers import SentenceTransformer
 import joblib
 
@@ -133,7 +132,7 @@ def evaluate_ordinal_model(y_true, y_pred, category_name, class_labels):
     report = classification_report(
         y_true, y_pred,
         labels=class_labels,
-        target_names=[f"L{l}" for l in class_labels],
+        target_names=[f"L{lv}" for lv in class_labels],
         output_dict=True,
         zero_division=0
     )
@@ -171,7 +170,13 @@ def train_category_model(X_all, y_all, weights, category_name, out_dir):
         # Train on all data anyway
         model = OrdinalClassifier()
         model.fit(X, y, sample_weight=w)
-        joblib.dump(model, os.path.join(out_dir, f"{category_name.lower()}_model.joblib"))
+        joblib.dump(
+            model,
+            os.path.join(
+                out_dir,
+                f"{category_name.lower()}_model.joblib",
+            ),
+        )
         return None
 
     # Choose CV strategy based on sample size
@@ -210,7 +215,7 @@ def train_category_model(X_all, y_all, weights, category_name, out_dir):
         all_true = []
         all_pred = []
         all_proba = []
-        fold_metrics = []
+
 
         for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
             X_train, X_val = X[train_idx], X[val_idx]
@@ -258,7 +263,7 @@ def train_category_model(X_all, y_all, weights, category_name, out_dir):
 
     # Confusion matrix
     cm = confusion_matrix(all_true, all_pred, labels=class_labels)
-    print(f"  Confusion Matrix:")
+    print("  Confusion Matrix:")
     print(f"  {'':15s} Pred 1  Pred 2  Pred 3")
     for i, label in enumerate(class_labels):
         print(f"  True {label}:       {cm[i][0]:5d}   {cm[i][1]:5d}   {cm[i][2]:5d}")
@@ -344,13 +349,22 @@ def main():
     print("=" * 60)
 
     summary = "--- Affect Risk Model Summary ---\n\n"
-    summary += f"{'Category':15s} {'MAE':>8s} {'QWK':>8s} {'Macro-F1':>10s} {'Adj.Acc':>10s} {'Samples':>8s}\n"
+    summary += (
+        f"{'Category':15s} {'MAE':>8s} {'QWK':>8s}"
+        f" {'Macro-F1':>10s} {'Adj.Acc':>10s}"
+        f" {'Samples':>8s}\n"
+    )
     summary += "-" * 65 + "\n"
 
     for cat_name in ['psychosis', 'depression', 'anxiety']:
         m = results[cat_name]
         if m is None:
-            summary += f"{cat_name:15s} {'N/A':>8s} {'N/A':>8s} {'N/A':>10s} {'N/A':>10s} {'<10':>8s}\n"
+            summary += (
+                f"{cat_name:15s}"
+                f" {'N/A':>8s} {'N/A':>8s}"
+                f" {'N/A':>10s} {'N/A':>10s}"
+                f" {'<10':>8s}\n"
+            )
         else:
             n_samples = int(df[f'{cat_name}_score'].notna().sum())
             summary += (

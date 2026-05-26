@@ -42,7 +42,11 @@ def main():
     docs = df['segment_transcript'].fillna("").astype(str).tolist()
     labels = df['symptom_label'].tolist()
 
-    print(f"Loaded {len(docs)} documents across {df['symptom_label'].nunique()} classes.")
+    n_unique = df['symptom_label'].nunique()
+    print(
+        f"Loaded {len(docs)} documents"
+        f" across {n_unique} classes."
+    )
 
     # Encode labels
     le = LabelEncoder()
@@ -62,7 +66,10 @@ def main():
     # --- Class weights (inversely proportional to frequency) ---
     class_counts = Counter(y)
     total = len(y)
-    class_weights = {cls: total / (n_classes * count) for cls, count in class_counts.items()}
+    class_weights = {
+        cls: total / (n_classes * count)
+        for cls, count in class_counts.items()
+    }
     sample_weights = np.array([class_weights[yi] for yi in y])
 
     # --- 5-Fold Stratified Cross-Validation ---
@@ -93,7 +100,11 @@ def main():
         macro_f1 = f1_score(y_val, y_pred, average='macro', zero_division=0)
         weighted_f1 = f1_score(y_val, y_pred, average='weighted', zero_division=0)
 
-        print(f"  Fold {fold+1}: macro-F1={macro_f1:.3f}, weighted-F1={weighted_f1:.3f}")
+        print(
+            f"  Fold {fold+1}:"
+            f" macro-F1={macro_f1:.3f},"
+            f" weighted-F1={weighted_f1:.3f}"
+        )
         fold_metrics.append({
             'fold': fold + 1,
             'macro_f1': macro_f1,
@@ -109,7 +120,7 @@ def main():
     std_macro = np.std([m['macro_f1'] for m in fold_metrics])
     std_weighted = np.std([m['weighted_f1'] for m in fold_metrics])
 
-    print(f"\n--- Cross-Validation Summary ---")
+    print("\n--- Cross-Validation Summary ---")
     print(f"Macro F1:    {avg_macro:.4f} ± {std_macro:.4f}")
     print(f"Weighted F1: {avg_weighted:.4f} ± {std_weighted:.4f}")
 
