@@ -175,6 +175,7 @@ async def lifespan(app: FastAPI):
     affect_risk_dir = "./affect_risk_model"
     if os.path.exists(affect_risk_dir):
         import joblib
+        import ordinal_classifier  # noqa: F401 — required for joblib
         for category in ["psychosis", "depression", "anxiety"]:
             model_path = os.path.join(
                 affect_risk_dir, category, "model.joblib"

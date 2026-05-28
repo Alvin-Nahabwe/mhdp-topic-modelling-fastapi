@@ -38,6 +38,7 @@ COPY --from=builder /root/.cache/huggingface /root/.cache/huggingface
 COPY api.py .
 COPY stop_words.py .
 COPY clinical_vocabulary.py .
+COPY ordinal_classifier.py .
 COPY bertopic_semi_supervised ./bertopic_semi_supervised
 
 # Copy classifier model if available (preferred production model)

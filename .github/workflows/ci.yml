@@ -53,4 +53,4 @@ jobs:
           pip install ruff
 
       - name: Lint with ruff
-        run: ruff check api.py clinical_vocabulary.py stop_words.py train_*.py --select E,W,F
+        run: ruff check api.py clinical_vocabulary.py ordinal_classifier.py stop_words.py train_*.py --select E,W,F
