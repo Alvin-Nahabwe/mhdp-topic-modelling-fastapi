@@ -404,8 +404,9 @@ def build_clinical_pattern():
 CLINICAL_PATTERN = build_clinical_pattern()
 
 # Minimum number of distinct clinical matches required to classify
-# text as clinical. Prevents single-word false positives.
-MIN_CLINICAL_MATCHES = 2
+# text as clinical. Set to 1 because the phrase-based vocabulary
+# already prevents false positives from common English words.
+MIN_CLINICAL_MATCHES = 1
 
 
 def has_clinical_content(text, min_matches=MIN_CLINICAL_MATCHES):

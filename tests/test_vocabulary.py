@@ -195,11 +195,10 @@ class TestClinicalGate:
             f"Should NOT be clinical: '{text}'"
         )
 
-    def test_single_clinical_term_insufficient(self):
-        """A single clinical match should NOT pass the gate."""
+    def test_single_clinical_term_sufficient(self):
+        """A single clinical match should pass the gate."""
         from clinical_vocabulary import has_clinical_content
-        # Only one clinical unigram — should fail >= 2 check
-        assert not has_clinical_content(
+        assert has_clinical_content(
             "I feel depressed today but otherwise fine"
         )
 
