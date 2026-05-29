@@ -39,6 +39,7 @@ import re
 SAFE_CLINICAL_UNIGRAMS = {
     # --- Psychosis ---
     "hallucination", "hallucinate", "hallucinations",
+    "hallucinating", "hallucinated", "hallucinates",
     "delusion", "delusional", "delusions",
     "paranoid", "paranoia",
     "psychosis", "psychotic",
@@ -77,7 +78,7 @@ SAFE_CLINICAL_UNIGRAMS = {
     "nausea",
     "forgetful",
     "mumbling",
-    "isolating",
+    "isolating", "isolated",
     "withdrawn",
     "withdrawing",
 
@@ -255,8 +256,9 @@ CLINICAL_PHRASES = {
     "Disorganized behaviors": [
         "wants to fight", "fighting people",
         "getting into fights", "violent behavior",
-        "aggressive behavior", "acting violent",
-        "acting aggressive", "attacking people",
+        "aggressive behavior", "acting aggressive",
+        "very aggressive", "being aggressive",
+        "acting violent", "attacking people",
         "destroying things", "breaking things",
         "taking off clothes", "removing clothes",
         "walking naked", "wandering around",
