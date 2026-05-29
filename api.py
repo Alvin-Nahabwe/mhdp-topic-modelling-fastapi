@@ -30,7 +30,12 @@ from pydantic import BaseModel, Field, field_validator
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
 from stop_words import ALL_STOP_WORDS
-from clinical_vocabulary import HITOP_VOCABULARY
+from clinical_vocabulary import (
+    CLINICAL_PATTERN,
+    SAFE_CLINICAL_UNIGRAMS,
+    has_clinical_content,
+    extract_clinical_terms,
+)
 
 ml_models = {}
 
@@ -85,21 +90,10 @@ _metrics = {
     "errors_total": 0,
 }
 
-# Pre-compile clinical vocabulary regex for fast gate matching
-# Matches any clinical term (word boundary) from the HITOP vocabulary
-_all_clinical_terms = set()
-for terms in HITOP_VOCABULARY.values():
-    _all_clinical_terms.update(t.lower() for t in terms)
-
-# Sort by length (longest first) for greedy matching
-_sorted_terms = sorted(_all_clinical_terms, key=len, reverse=True)
-# Escape for regex, join with OR, require word boundaries
-_clinical_pattern = re.compile(
-    r'\b(?:'
-    + '|'.join(re.escape(t) for t in _sorted_terms)
-    + r')\b',
-    re.IGNORECASE,
-)
+# Clinical vocabulary regex is now built by clinical_vocabulary.py
+# which combines safe unigrams + required clinical phrases.
+# Requires >= 2 distinct matches (see has_clinical_content()).
+_clinical_pattern = CLINICAL_PATTERN
 
 
 @asynccontextmanager
@@ -154,8 +148,8 @@ async def lifespan(app: FastAPI):
     ml_models["clinical_vocab"] = clinical_vocab
     print(
         f"Clinical vocabulary: {len(clinical_vocab)} "
-        f"topic terms + {len(_all_clinical_terms)} "
-        f"HiTOP terms."
+        f"topic terms + {len(SAFE_CLINICAL_UNIGRAMS)} "
+        f"safe clinical unigrams."
     )
 
     # Load classifier model if available (preferred over BERTopic for classification)
@@ -251,7 +245,7 @@ async def health():
             if model_loaded
             else 0
         ),
-        "clinical_vocab_size": len(_all_clinical_terms),
+        "clinical_vocab_size": len(SAFE_CLINICAL_UNIGRAMS),
     }
 
 
@@ -443,16 +437,8 @@ def extract_conversation_keywords(
     return result
 
 
-def has_clinical_content(text: str) -> bool:
-    """
-    Fast clinical content gate using compiled regex from HiTOP vocabulary.
-
-    Returns True if the text contains any clinical term. This separates
-    'is this clinical content?' from 'which specific symptom?' — the model
-    may assign the wrong topic, but as long as the text is clinical, the
-    assignment is a reasonable attempt.
-    """
-    return bool(_clinical_pattern.search(text))
+# has_clinical_content is imported from clinical_vocabulary.
+# It requires >= 2 distinct clinical term/phrase matches.
 
 
 # --- Inference Endpoints ---
@@ -574,7 +560,9 @@ def _predict_with_classifier(caller_texts: list[str]) -> CallSummary:
     )
 
 
-def _extract_clinical_keywords(texts: list[str], top_n: int = 3) -> list[str]:
+def _extract_clinical_keywords(
+    texts: list[str], top_n: int = 3,
+) -> list[str]:
     """Extract clinical vocabulary terms found in the texts."""
     found_terms = Counter()
     for text in texts:
@@ -722,16 +710,12 @@ async def predict_affect_risk(request: AffectRiskRequest):
             )
         )
 
-    # Detect clinical terms in the transcript
-    clinical_matches = _clinical_pattern.findall(
-        request.transcript.lower()
-    )
-    # dedupe, cap at 20
-    unique_terms = list(
-        dict.fromkeys(clinical_matches)
-    )[:20]
+    # Detect clinical terms in the transcript (uses phrase-based
+    # matching from clinical_vocabulary.py)
+    unique_terms = extract_clinical_terms(request.transcript)
 
-    is_clinical = len(unique_terms) > 0
+    # Clinical gate: requires >= 2 distinct clinical matches
+    is_clinical = has_clinical_content(request.transcript)
 
     # Clinical gate: non-clinical text gets score=0 for all categories
     if not is_clinical:
