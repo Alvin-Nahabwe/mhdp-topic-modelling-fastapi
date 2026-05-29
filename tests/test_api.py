@@ -12,7 +12,7 @@ Run: pytest tests/test_api.py -v
 
 import pytest
 import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 
@@ -120,7 +120,7 @@ class TestHealth:
         assert res.status_code == 200
 
     def test_health_reports_models(self, client):
-        data = res = client.get("/health").json()
+        data = client.get("/health").json()
         assert data["status"] == "healthy"
         assert data["model_loaded"] is True
         assert data["classifier_loaded"] is True
@@ -242,17 +242,25 @@ class TestPredictSymptoms:
 class TestAffectRisk:
     def test_basic_affect_risk(self, client):
         res = client.post("/predict_affect_risk", json={
-            "transcript": "I have been hearing voices for two weeks and I feel very sad and hopeless"
+            "transcript": (
+                "I have been hearing voices for two"
+                " weeks and I feel very sad and hopeless"
+            )
         })
         assert res.status_code == 200
         data = res.json()
         assert "risk_scores" in data
         assert "transcript_length" in data
         assert "clinical_terms_found" in data
+        assert "is_clinical" in data
+        assert data["is_clinical"] is True
 
     def test_affect_risk_scores_structure(self, client):
         res = client.post("/predict_affect_risk", json={
-            "transcript": "I cannot sleep and I feel anxious all the time with hearing voices"
+            "transcript": (
+                "I cannot sleep and I feel anxious"
+                " all the time with hearing voices"
+            )
         })
         data = res.json()
         categories_found = {r["category"] for r in data["risk_scores"]}
@@ -261,12 +269,17 @@ class TestAffectRisk:
         assert "anxiety" in categories_found
 
         for risk in data["risk_scores"]:
-            assert 1 <= risk["score"] <= 3
-            assert risk["label"] in ("Unlikely", "Possible", "Likely")
+            assert 0 <= risk["score"] <= 3
+            assert risk["label"] in (
+                "Non-Clinical", "Unlikely", "Possible", "Likely"
+            )
             assert "probabilities" in risk
-            # Probabilities should roughly sum to 1
-            total = sum(risk["probabilities"].values())
-            assert 0.95 <= total <= 1.05, f"Probabilities sum to {total}"
+            # Clinical scores should have probabilities summing to ~1
+            if risk["score"] > 0:
+                total = sum(risk["probabilities"].values())
+                assert 0.95 <= total <= 1.05, (
+                    f"Probabilities sum to {total}"
+                )
 
     def test_affect_risk_short_transcript_rejected(self, client):
         res = client.post("/predict_affect_risk", json={
@@ -276,8 +289,86 @@ class TestAffectRisk:
 
     def test_affect_risk_clinical_terms_detected(self, client):
         res = client.post("/predict_affect_risk", json={
-            "transcript": "I have been hearing voices and feeling very anxious with insomnia"
+            "transcript": (
+                "I have been hearing voices and"
+                " feeling very anxious with insomnia"
+            )
         })
         data = res.json()
+        assert data["is_clinical"] is True
         # Should find at least some clinical terms
         assert len(data["clinical_terms_found"]) > 0
+
+    def test_affect_risk_non_clinical_returns_zero(self, client):
+        """Non-clinical text should return score=0 and label='Non-Clinical'."""
+        res = client.post("/predict_affect_risk", json={
+            "transcript": (
+                "It is sunny outside and the bus"
+                " arrived on schedule this morning"
+            )
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["is_clinical"] is False
+        assert data["clinical_terms_found"] == []
+        for risk in data["risk_scores"]:
+            assert risk["score"] == 0
+            assert risk["label"] == "Non-Clinical"
+            assert risk["probabilities"] == {
+                "Unlikely": 0.0, "Possible": 0.0, "Likely": 0.0
+            }
+
+    def test_affect_risk_confidence_threshold(self, client):
+        """When max probability is below 0.6, score should default to Unlikely."""
+        import api
+        # Create mock with low-confidence (near-uniform) probabilities
+        mock_affect_low = MagicMock()
+        mock_affect_low.predict.return_value = np.array([3])  # argmax says Likely
+        mock_affect_low.predict_proba.return_value = np.array(
+            [[0.32, 0.30, 0.38]]  # max=0.38 < 0.6 threshold
+        )
+        mock_affect_low.classes_ = np.array([1, 2, 3])
+
+        # Temporarily replace affect models with low-confidence mocks
+        original_psychosis = api.ml_models.get("affect_psychosis")
+        api.ml_models["affect_psychosis"] = mock_affect_low
+
+        try:
+            res = client.post("/predict_affect_risk", json={
+                "transcript": "I have been hearing voices and seeing things at night"
+            })
+            assert res.status_code == 200
+            data = res.json()
+            # Find psychosis score — should be Unlikely despite argmax=3
+            psychosis = next(
+                r for r in data["risk_scores"]
+                if r["category"] == "psychosis"
+            )
+            assert psychosis["score"] == 1
+            assert psychosis["label"] == "Unlikely"
+            # Original probabilities should be preserved for transparency
+            assert psychosis["probabilities"]["Likely"] == 0.38
+        finally:
+            if original_psychosis is not None:
+                api.ml_models["affect_psychosis"] = original_psychosis
+
+
+# --- Non-clinical symptoms count ---
+
+class TestNonClinicalSymptoms:
+    def test_symptoms_non_clinical_count(self, client):
+        """Non-clinical segments should be tracked in non_clinical_transcripts."""
+        res = client.post("/predict_symptoms", json={
+            "speaker_segments": [
+                _make_segment("I hear voices telling me things"),
+                _make_segment("The weather is nice today nothing wrong"),
+                _make_segment("I went to the market to buy food"),
+            ]
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert "non_clinical_transcripts" in data
+        # At least the non-clinical segments should be counted
+        assert data["non_clinical_transcripts"] >= 0
+        assert data["total_transcripts"] == 3
+

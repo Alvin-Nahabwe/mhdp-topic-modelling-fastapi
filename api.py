@@ -340,6 +340,10 @@ class CallSummary(BaseModel):
     total_transcripts: int
     classified_transcripts: int
     undefined_transcripts: int
+    non_clinical_transcripts: int = Field(
+        default=0,
+        description="Segments with no clinical vocabulary detected"
+    )
     classification_rate: float
     model_used: str = "bertopic"
     symptoms: list[SymptomSummary]
@@ -347,7 +351,10 @@ class CallSummary(BaseModel):
 
 class AffectRiskScore(BaseModel):
     category: str = Field(..., description="psychosis, depression, or anxiety")
-    score: int = Field(..., ge=1, le=3, description="1=Unlikely, 2=Possible, 3=Likely")
+    score: int = Field(
+        ..., ge=0, le=3,
+        description="0=Non-Clinical, 1=Unlikely, 2=Possible, 3=Likely"
+    )
     label: str = Field(..., description="Human-readable likelihood label")
     probabilities: dict[str, float] = Field(
         ..., description="Probability for each ordinal level"
@@ -356,6 +363,10 @@ class AffectRiskScore(BaseModel):
 
 class AffectRiskResponse(BaseModel):
     transcript_length: int
+    is_clinical: bool = Field(
+        ...,
+        description="Whether the transcript contained clinical vocabulary"
+    )
     risk_scores: list[AffectRiskScore]
     clinical_terms_found: list[str] = Field(
         default_factory=list,
@@ -509,7 +520,7 @@ def _predict_with_classifier(caller_texts: list[str]) -> CallSummary:
     probabilities = classifier.predict_proba(embeddings)
 
     symptom_groups = defaultdict(lambda: {"texts": [], "confidences": []})
-    undefined_count = 0
+    non_clinical_count = 0
     total = len(caller_texts)
 
     for text, label, proba in zip(caller_texts, predicted_labels, probabilities):
@@ -517,18 +528,18 @@ def _predict_with_classifier(caller_texts: list[str]) -> CallSummary:
 
         # Clinical vocabulary gate: skip non-clinical content
         if not has_clinical_content(text):
-            undefined_count += 1
+            non_clinical_count += 1
             continue
 
-        # Non-Clinical class is an actual label, not undefined
+        # Non-Clinical class is an actual label from the classifier
         if label == "Non-Clinical":
-            undefined_count += 1
+            non_clinical_count += 1
             continue
 
         symptom_groups[label]["texts"].append(text)
         symptom_groups[label]["confidences"].append(max_prob)
 
-    classified_count = total - undefined_count
+    classified_count = total - non_clinical_count
     symptoms = []
 
     for label, group in symptom_groups.items():
@@ -551,7 +562,8 @@ def _predict_with_classifier(caller_texts: list[str]) -> CallSummary:
     return CallSummary(
         total_transcripts=total,
         classified_transcripts=classified_count,
-        undefined_transcripts=undefined_count,
+        undefined_transcripts=0,
+        non_clinical_transcripts=non_clinical_count,
         classification_rate=(
             round((classified_count / total) * 100, 1)
             if total > 0
@@ -675,14 +687,25 @@ def _predict_with_bertopic(caller_texts: list[str]) -> CallSummary:
 
 # --- Affect Risk Endpoint ---
 
+# Minimum max-class probability required to trust the model prediction.
+# Below this threshold, predictions default to Unlikely (score=1).
+AFFECT_CONFIDENCE_THRESHOLD = 0.6
+
+
 @app.post("/predict_affect_risk", response_model=AffectRiskResponse)
 async def predict_affect_risk(request: AffectRiskRequest):
     """
     Predict ordinal likelihood scores for psychosis, depression, and anxiety.
 
-    Returns a score of 1 (Unlikely), 2 (Possible), or 3 (Likely) for each
-    category, along with the probability distribution across all levels.
-    Requires affect risk models to be loaded (train_affect_risk.py).
+    Returns a score of 0 (Non-Clinical), 1 (Unlikely), 2 (Possible), or
+    3 (Likely) for each category, along with the probability distribution
+    across all levels.
+
+    Safety guardrails:
+    - Clinical gate: transcripts without clinical vocabulary return
+      score=0 / label="Non-Clinical" for all categories.
+    - Confidence threshold: if the model's max probability is below 0.6,
+      the prediction defaults to score=1 / label="Unlikely".
     """
     # Check if any affect risk models are loaded
     loaded_categories = [
@@ -699,6 +722,48 @@ async def predict_affect_risk(request: AffectRiskRequest):
             )
         )
 
+    # Detect clinical terms in the transcript
+    clinical_matches = _clinical_pattern.findall(
+        request.transcript.lower()
+    )
+    # dedupe, cap at 20
+    unique_terms = list(
+        dict.fromkeys(clinical_matches)
+    )[:20]
+
+    is_clinical = len(unique_terms) > 0
+
+    # Clinical gate: non-clinical text gets score=0 for all categories
+    if not is_clinical:
+        zero_probs = {"Unlikely": 0.0, "Possible": 0.0, "Likely": 0.0}
+        risk_scores = [
+            AffectRiskScore(
+                category=cat,
+                score=0,
+                label="Non-Clinical",
+                probabilities=zero_probs
+            )
+            for cat in ["psychosis", "depression", "anxiety"]
+            if f"affect_{cat}" in ml_models
+        ]
+
+        _metrics["affect_risk_total"] += 1
+        logger.info(
+            "Affect risk assessment: non-clinical transcript",
+            extra={"extra_data": {
+                "is_clinical": False,
+                "transcript_length": len(request.transcript),
+            }}
+        )
+
+        return AffectRiskResponse(
+            transcript_length=len(request.transcript),
+            is_clinical=False,
+            risk_scores=risk_scores,
+            clinical_terms_found=[]
+        )
+
+    # Clinical transcript — run model inference
     embedder = ml_models["embedder"]
     embedding = embedder.encode([request.transcript])
 
@@ -714,29 +779,31 @@ async def predict_affect_risk(request: AffectRiskRequest):
         pred = model.predict(embedding)[0]
         proba = model.predict_proba(embedding)[0]
 
+        max_prob = float(proba.max())
+
+        # Confidence threshold: uncertain predictions default to Unlikely
+        if max_prob < AFFECT_CONFIDENCE_THRESHOLD:
+            final_score = 1
+            final_label = "Unlikely"
+        else:
+            final_score = int(pred)
+            final_label = level_labels.get(int(pred), "Unknown")
+
         risk_scores.append(AffectRiskScore(
             category=category,
-            score=int(pred),
-            label=level_labels.get(int(pred), "Unknown"),
+            score=final_score,
+            label=final_label,
             probabilities={
                 level_labels[i+1]: round(float(p), 4)
                 for i, p in enumerate(proba)
             }
         ))
 
-    # Detect clinical terms in the transcript
-    clinical_matches = _clinical_pattern.findall(
-        request.transcript.lower()
-    )
-    # dedupe, cap at 20
-    unique_terms = list(
-        dict.fromkeys(clinical_matches)
-    )[:20]
-
     _metrics["affect_risk_total"] += 1
     logger.info(
         f"Affect risk assessment: {len(risk_scores)} categories scored",
         extra={"extra_data": {
+            "is_clinical": True,
             "categories_scored": len(risk_scores),
             "scores": {r.category: r.score for r in risk_scores},
             "clinical_terms_count": len(unique_terms),
@@ -745,6 +812,7 @@ async def predict_affect_risk(request: AffectRiskRequest):
 
     return AffectRiskResponse(
         transcript_length=len(request.transcript),
+        is_clinical=True,
         risk_scores=risk_scores,
         clinical_terms_found=unique_terms
     )
