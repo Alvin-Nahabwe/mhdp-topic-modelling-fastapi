@@ -10,11 +10,13 @@ Architecture (Three-Tier):
            clinical in isolation (e.g., "suicidal", "hallucination").
   Tier 2 — Required Phrases: Common English words that MUST appear in a
            clinical context (e.g., "can't sleep", "hearing voices").
-  Luganda terms are classified as safe unigrams because they are
-  domain-specific and do not false-positive in English transcripts.
+  Luganda terms follow the same pattern: common everyday words
+  (emmere, tulo, okulya, bingi, okutya, okukuba, etc.) are moved
+  to CLINICAL_PHRASES requiring contextual multi-word patterns.
 
-The clinical gate requires >= 2 matches to classify text as clinical,
-preventing single-word false positives from casual conversation.
+The clinical gate requires >= 1 match to classify text as clinical.
+The phrase-based vocabulary itself prevents false positives from
+common everyday words in both English and Luganda.
 
 Sources:
 - PHQ-9 (Patient Health Questionnaire-9) item wordings
@@ -82,32 +84,58 @@ SAFE_CLINICAL_UNIGRAMS = {
     "withdrawn",
     "withdrawing",
 
-    # --- Luganda Clinical Terms ---
-    # Sleep (Insomnia/Hypersomnia)
-    "tulo", "okwebaka", "sifuna", "ssebaka",
-    "teyebaka", "kubaka", "okusumagila", "linebassa",
-    # Mood / Depression
-    "ennaku", "okwennyama", "nafu", "bunafu", "obuzibu",
-    "okwekawa", "yekyaye", "akyawe",
-    # Anxiety / Fear
-    "okutya", "entiisa", "okweraliikirira", "natiisa",
-    # Fatigue / Energy
-    "amanyi", "omubiri", "obunafu", "mangyi",
-    "tayena", "munafu",
-    # Appetite
-    "okulya", "emmere", "ademye", "enjala",
-    # Suicide
-    "okwetta", "kufaa", "kufa", "ngenda",
-    # Speech / Behavior
-    "ayogera", "yogeera", "yogera", "bingi", "binjibinji",
-    "ebigambo", "byesulise",
-    # Violence / Disorganization
-    "adduka", "olwaana", "okukuba", "okwesulya",
-    "natandika", "kurwana",
-    # Hallucination
-    "okulaba", "okuwulira", "eddoboozi",
-    # Social withdrawal
-    "yekweka", "yeesibye", "okwekweka",
+    # --- Luganda Clinical Terms (LOW RISK ONLY) ---
+    # These are clinical-only or very rare in everyday Luganda.
+    # Common everyday words are in CLINICAL_PHRASES.
+
+    # Idioms of distress (validated clinical terms)
+    "okwennyama",       # deep thoughts — clinical idiom
+    "okweraliikirira",  # worry/anxiety — clinical idiom
+
+    # Suicide / death (clinical-specific)
+    "okwetta",          # to kill oneself (reflexive of okutta)
+    "kwetta",           # casual form: dropped oku- prefix
+    "yetta",            # conjugated: he/she kills self
+    "kufaa", "kufa",    # to die / death
+
+    # Self-hatred / clinical emotional states
+    "okwekawa",         # self-loathing
+    "yekyaye", "akyawe",  # has self-hatred
+
+    # Psychosis
+    "eddoboozi",        # voice(s) — hallucination context
+    "eddalu",           # madness
+
+    # Withdrawal / isolation
+    "yekweka",          # hides oneself
+    "okwekweka",        # to hide oneself
+    "yeesibye",         # has isolated
+
+    # Disorganized behavior
+    "okwesulya",        # to undress (clinical)
+    "byesulise",        # has undressed
+
+    # Sleep disturbance (clinical-specific forms)
+    "okusumagila",      # to sleepwalk
+    "linebassa",        # sleep disturbance
+    "sifuna",           # can't get (sleep)
+    "ssebaka",          # doesn't sleep
+    "teyebaka",         # doesn't sleep (negated)
+
+    # Weakness / fatigue (clinical forms)
+    "bunafu", "obunafu",  # weakness
+    "munafu",           # weak one
+    "tayena",           # has no (energy)
+
+    # Appetite (clinical-specific)
+    "ademye",           # has lost weight
+    "takyalya",         # no longer eats (negated verb)
+
+    # Other clinical
+    "binjibinji",       # excessively/chaotically
+    "natiisa",          # is fearful (clinical)
+    "entiisa",          # terror/dread
+    "natandika",        # has started (behaving abnormally)
 }
 
 
@@ -130,8 +158,11 @@ CLINICAL_PHRASES = {
         "keeps waking", "waking up at night",
         "staying awake", "can't stay asleep",
         "bad dreams", "disturbing dreams",
-        # Luganda
+        # Luganda (everyday words: tulo, okwebaka require phrases)
         "teyebaka kiro", "tafuna tulo",
+        "talina tulo", "tulo tumulemye",
+        "tayebaka kiro", "tayebaka bulungi",
+        "okwebaka bubi",
     ],
     "Low mood/Anhedonia": [
         # PHQ-9 #1: "Little interest or pleasure in doing things"
@@ -145,6 +176,11 @@ CLINICAL_PHRASES = {
         "crying all the time", "always crying",
         "want to cry", "feels like crying",
         "lost meaning", "life is meaningless",
+        # Luganda (ennaku = sorrow, okwennyama = deep thoughts)
+        "afuna ennaku", "ennaku ennyo",
+        "ebirowoozo bingi", "ebirowoozo ebingi",
+        "okwenyamira ennyo", "okwennyama ennyo",
+        "talina ssanyu", "sirina mirembe",
     ],
     "Fatigue/Low energy": [
         # PHQ-9 #4: "Feeling tired or having little energy"
@@ -154,6 +190,10 @@ CLINICAL_PHRASES = {
         "feeling weak", "feeling exhausted",
         "feeling drained", "so tired",
         "can't get up", "too tired",
+        # Luganda (amanyi, omubiri = everyday; require phrases)
+        "talina maanyi", "amanyi gamuweddeko",
+        "omubiri gunafu", "omubiri gumunuma",
+        "munafu ennyo", "nafu ennyo",
     ],
     "Appetite disturbance": [
         # PHQ-9 #5: "Poor appetite or overeating"
@@ -163,6 +203,10 @@ CLINICAL_PHRASES = {
         "eating too much",
         "lost weight", "gaining weight",
         "feeling nauseous",
+        # Luganda (emmere, okulya, enjala = everyday; require phrases)
+        "talya mmere", "ayaanye emmere",
+        "talina njala", "enjala temulya",
+        "okulya bubi", "talya bulungi",
     ],
     "Concentration problems": [
         # PHQ-9 #7: "Trouble concentrating on things"
@@ -201,6 +245,10 @@ CLINICAL_PHRASES = {
         "attempted suicide", "suicide attempt",
         "took poison", "drank poison",
         "cutting myself", "cutting herself",
+        # Luganda (ngenda = everyday 'I'm going'; requires phrase)
+        "agenda kwetta", "agamba nti agenda kwetta",
+        "ngenda kwetta", "yagala kwetta",
+        "agenda kufaa",
     ],
     "Anxiety spectrum": [
         # GAD-7 #1: "Feeling nervous, anxious, or on edge"
@@ -223,6 +271,9 @@ CLINICAL_PHRASES = {
         "rapid heartbeat",
         "something bad will happen",
         "something awful",
+        # Luganda (okutya = everyday 'to fear/respect'; requires phrase)
+        "okutya ennyo", "atidde ennyo",
+        "okweraliikirira ennyo",
     ],
     "Hallucination/Delusions": [
         # PSQ: "Have you heard or saw things that other people
@@ -236,6 +287,10 @@ CLINICAL_PHRASES = {
         "plotting against me",
         "thoughts being controlled",
         "voices telling me", "voices told me",
+        # Luganda (okulaba, okuwulira = everyday verbs; require phrases)
+        "awulira eddoboozi", "okuwulira amaloboozi",
+        "alaba ebintu", "okulaba ebitaliiwo",
+        "alaba ebitaliiwo",
     ],
     "Disorganized speech": [
         "talking nonsense", "making no sense",
@@ -245,6 +300,10 @@ CLINICAL_PHRASES = {
         "talking to self", "talks to self",
         "talks to himself", "talks to herself",
         "speaking incoherently",
+        # Luganda (ayogera, ebigambo = everyday; require phrases)
+        "ayogera yekka", "yogera yekka",
+        "ayogera ebitaliiwo",
+        "ebigambo ebitali bimu",
     ],
     "Over talkative": [
         "talking too much", "talks too much",
@@ -252,6 +311,9 @@ CLINICAL_PHRASES = {
         "pressured speech", "talking fast",
         "rapid speech", "racing thoughts",
         "speaks very fast", "talking nonstop",
+        # Luganda (ayogera, bingi = everyday; require phrases)
+        "ayogera bingi", "yogera bingi",
+        "ebigambo bingi", "ebigambo ebingi",
     ],
     "Disorganized behaviors": [
         "wants to fight", "fighting people",
@@ -264,6 +326,13 @@ CLINICAL_PHRASES = {
         "walking naked", "wandering around",
         "acting strange", "strange behavior",
         "bizarre behavior",
+        # Luganda (okukuba, olwaana, adduka = everyday; require phrases)
+        "akuba abantu", "okukuba omuntu",
+        "alwaana abantu", "olwaana n'abantu",
+        "adduka mu kkubo", "adduka buli kiseera",
+        # Psychosis phrases (Baganda cultural concepts)
+        "agudde eddalu", "eddalu lyamukutte",
+        "akazoole kamukutte",
     ],
     "Functional impairment": [
         # PHQ-9 functional item: "How difficult have these
@@ -287,6 +356,8 @@ CLINICAL_PHRASES = {
         "hiding from people", "refuses to go out",
         "doesn't talk to anyone",
         "stopped socializing",
+        # Luganda
+        "yeesibye yekka", "afunze mu kisenge",
     ],
 }
 
